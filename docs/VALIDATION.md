@@ -27,3 +27,7 @@
 ## 打刻パフォーマンス
 
 差分応答・即時仮表示・条件付き取得・集計キャッシュを導入。38件の単体テスト、既存API20項目、新しい打刻API、ユーザー分離、PC/スマホの遅延・失敗・応答欠落時の再試行を確認。測定条件と結果は PERFORMANCE.md に記載。
+
+## 指定アイコンの反映
+
+punch-in-icon-v2.pngを元に、ロゴの形を保持して余白を整えたPNG/ICOを設定。PCとスマホ390pxのヘッダー表示、favicon（16/32/48）、Apple用180px、manifest用192/512px、通知画像を確認。favicon・Apple画像・manifestはHTTP 200かつ適切なContent-Typeで取得でき、ヘッダーは96px・約3.5KBの画像を26pxで表示。型チェック・productionビルド成功。

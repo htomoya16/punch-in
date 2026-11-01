@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Clock3, CalendarDays, ChartNoAxesCombined, Settings2, LayoutGrid, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Plus, Pencil, X, Menu, LogOut, Play, Square, Search, Download, Upload, Eye, EyeOff, Trash2, Check, LoaderCircle, Bell, ArrowRight, RefreshCw } from "lucide-react";
-import type { AppState, Backup, Category, Preferences, Session } from "../lib/model";
+import type { AppState, Backup, Category, PendingPunch, Preferences, PunchDelta, Session } from "../lib/model";
 import { businessDay, clock, contrastText, dayStartLabel, duration, fromTimeInput, hms, hoursMinutes, periodRange, readableDate, readableColor, shiftDay, shiftPeriod, timeInput, wallParts, type Period } from "../lib/time";
 
+import { applyPunchDelta, completedTotal, projectPunch } from "../lib/punch-state";
+
 type View="punch"|"history"|"stats"|"categories"|"settings";
-type Job={action:string;payload:unknown;mutationId:string;expectedRevision:number};
+type Job={action:string;payload:unknown;mutationId:string;expectedRevision:number;responseMode?:"delta";pressedAt?:number};
+type ActionResult={error?:string;state?:AppState;punchDelta?:PunchDelta;preview?:Preview};
 type Preview={categories:number;sessions:number;skippedCategories:number;skippedSessions:number;running:boolean};
 const NAV=[{id:"punch",label:"打刻",icon:Clock3},{id:"history",label:"履歴",icon:CalendarDays},{id:"stats",label:"集計",icon:ChartNoAxesCombined},{id:"categories",label:"作業の種類",icon:LayoutGrid},{id:"settings",label:"設定",icon:Settings2}] as const;
 const PALETTE=["#168ab5","#12a89a","#ec846c","#9380c4","#d49b38","#587b64","#b45f91","#64748b"];
@@ -23,10 +26,13 @@ function saveFile(content:string,name:string,type:string) { const url=URL.create
 function csv(rows:(string|number)[][]) { return "\uFEFF"+rows.map(row=>row.map(v=>{let s=String(v);if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}).join(",")).join("\r\n"); }
 
 export default function PunchApp({initial,displayName}:{initial:AppState;displayName:string}) {
-  const [state,setState]=useState(initial), [view,setView]=useState<View>("punch"), [menu,setMenu]=useState(false);
+  const [savedState,setState]=useState(initial), [view,setView]=useState<View>("punch"), [menu,setMenu]=useState(false);
+  const [pendingPunch,setPendingPunch]=useState<PendingPunch|null>(null);
+  const state=useMemo(()=>pendingPunch?projectPunch(savedState,pendingPunch):savedState,[savedState,pendingPunch]);
   const [mobile,setMobile]=useState(false);
   useEffect(()=>{const m=window.matchMedia("(max-width:760px)");const change=()=>setMobile(m.matches);change();m.addEventListener("change",change);return()=>m.removeEventListener("change",change);},[]);
-  const stateRef=useRef(state);stateRef.current=state;
+  const stateRef=useRef(savedState);stateRef.current=savedState;
+  const refreshing=useRef(false);
   const [now,setNow]=useState(initial.serverNow);const offset=useRef(initial.serverNow-Date.now());
   const [pending,setPending]=useState(false);const busy=useRef(false);
   const [toast,setToast]=useState<{text:string;error?:boolean}|null>(null),[retry,setRetry]=useState<Job|null>(null);
@@ -39,51 +45,92 @@ export default function PunchApp({initial,displayName}:{initial:AppState;display
   const [backup,setBackup]=useState<Backup|null>(null),[preview,setPreview]=useState<Preview|null>(null),[includePrefs,setIncludePrefs]=useState(true);
   const [permission,setPermission]=useState("default");
   const notified=useRef(new Set<string>());
-  const update=useCallback((next:AppState)=>{offset.current=next.serverNow-Date.now();setNow(next.serverNow);setState(old=>next.revision>=old.revision?next:old);},[]);
-  const refresh=useCallback(async()=>{try{const r=await fetch("/api/state",{cache:"no-store"});if(r.ok)update(await r.json());}catch{/* Current saved state remains visible. */}},[update]);
-  useEffect(()=>{const tick=setInterval(()=>setNow(Date.now()+offset.current),1000);const poll=setInterval(refresh,15000);const focus=()=>{if(!document.hidden)void refresh();};window.addEventListener("focus",focus);window.addEventListener("online",focus);document.addEventListener("visibilitychange",focus);return()=>{clearInterval(tick);clearInterval(poll);window.removeEventListener("focus",focus);window.removeEventListener("online",focus);document.removeEventListener("visibilitychange",focus);};},[refresh]);
+  const update=useCallback((next:AppState)=>{
+    if(next.revision<stateRef.current.revision)return;
+    offset.current=next.serverNow-Date.now();setNow(next.serverNow);
+    if(next.revision>stateRef.current.revision){stateRef.current=next;setState(next);}
+  },[]);
+  const refresh=useCallback(async(force=false)=>{
+    if(!force&&(busy.current||refreshing.current||document.hidden))return false;
+    refreshing.current=true;
+    try {
+      const url=force?"/api/state":`/api/state?revision=${stateRef.current.revision}`;
+      const sentAt=Date.now();
+      const r=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(5000)});
+      if(!force&&busy.current)return false;
+      if(r.status===304){const serverNow=Number(r.headers.get("X-Server-Now"));if(serverNow>0){offset.current=serverNow-(sentAt+Date.now())/2;setNow(Date.now()+offset.current);}return true;}
+      if(r.ok){update(await r.json() as AppState);return true;}
+      return false;
+    }catch{return false;}
+    finally{refreshing.current=false;}
+  },[update]);
+  useEffect(()=>{void refresh();const tick=setInterval(()=>setNow(Date.now()+offset.current),1000);const poll=setInterval(()=>void refresh(),15000);const focus=()=>{if(!document.hidden)void refresh();};window.addEventListener("focus",focus);window.addEventListener("online",focus);document.addEventListener("visibilitychange",focus);return()=>{clearInterval(tick);clearInterval(poll);window.removeEventListener("focus",focus);window.removeEventListener("online",focus);document.removeEventListener("visibilitychange",focus);};},[refresh]);
   useEffect(()=>{if(!toast||toast.error)return;const id=setTimeout(()=>setToast(null),4500);return()=>clearTimeout(id);},[toast]);
   useEffect(()=>{if("Notification" in window)setPermission(Notification.permission);},[]);
-  const running=state.sessions.find(s=>s.endedAt===null),runningCategory=state.categories.find(c=>c.id===running?.categoryId);
+  const categoryMap=useMemo(()=>new Map(state.categories.map(c=>[c.id,c])),[state.categories]);
+  const running=useMemo(()=>state.sessions.find(s=>s.endedAt===null),[state.sessions]),runningCategory=categoryMap.get(running?.categoryId??"");
   useEffect(()=>{
-    if(!running||!state.preferences.reminderEnabled||now-running.startedAt<state.preferences.reminderMinutes*60000)return;
+    if(pendingPunch||!running||!state.preferences.reminderEnabled||now-running.startedAt<state.preferences.reminderMinutes*60000)return;
     const key=`punch-in:reminded:${running.id}`;
     if(notified.current.has(key))return;notified.current.add(key);
     try { if(localStorage.getItem(key))return;localStorage.setItem(key,"1"); } catch { /* Keep in-memory notification deduplication. */ }
     const message=`${runningCategory?.name??"作業"}を${hoursMinutes(now-running.startedAt)}計測しています`;
     setToast({text:message});
     if("Notification" in window&&Notification.permission==="granted")try{new Notification("終了を忘れていませんか？",{body:message,tag:running.id,icon:"/favicon.svg"});}catch{/* In-app notification is still delivered. */}
-  },[now,running,runningCategory,state.preferences]);
+  },[now,running,runningCategory,state.preferences,pendingPunch]);
   async function execute(job:Job,success?:string) {
     if(busy.current)return null;busy.current=true;setPending(true);setRetry(null);
+    let retryable=true;
+    if(job.action==="punch") {
+      const at=job.pressedAt??Math.round(Date.now()+offset.current);setNow(Date.now()+offset.current);
+      setPendingPunch({categoryId:(job.payload as {categoryId:string}).categoryId,mutationId:job.mutationId,baseRevision:job.expectedRevision,at});
+    }
     try {
-      const r=await fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(job)});
-      const result=await r.json() as {error?:string;state?:AppState;preview?:Preview};
-      if(!r.ok){if(r.status===409)await refresh();throw new Error(result.error||"保存できませんでした");}
+      const r=await fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(job),signal:AbortSignal.timeout(15000)});
+      const result=await r.json() as ActionResult;
+      if(!r.ok){retryable=r.status>=500;setPendingPunch(null);if(r.status===409)await refresh(true);throw new Error(result.error||"保存できませんでした");}
+      if(result.punchDelta){const next=applyPunchDelta(stateRef.current,result.punchDelta);if(next&&next!==stateRef.current)update(next);else if(!next&&!await refresh(true)){retryable=false;throw new Error("保存は完了しましたが、表示を更新できませんでした。再読み込みしてください");}}
       if(result.state)update(result.state);
       if(success)setToast({text:success});
-      return result as {state?:AppState;preview?:Preview};
-    } catch(e) {setToast({text:e instanceof TypeError?"通信できませんでした。接続を確認して再試行してください":e instanceof SyntaxError?"保存結果を確認できませんでした。再試行してください":e instanceof Error?e.message:"保存できませんでした",error:true});setRetry(job);return null;}
-    finally {busy.current=false;setPending(false);}
+      return result;
+    } catch(e) {
+      setPendingPunch(null);
+      const timedOut=e instanceof DOMException&&(e.name==="TimeoutError"||e.name==="AbortError");
+      setToast({text:timedOut?"保存結果を確認できませんでした。再試行してください":e instanceof TypeError?"通信できませんでした。接続を確認して再試行してください":e instanceof SyntaxError?"保存結果を確認できませんでした。再試行してください":e instanceof Error?e.message:"保存できませんでした",error:true});
+      setRetry(retryable?job:null);
+      if(retryable&&job.action==="punch")void refresh(true);
+      return null;
+    } finally {setPendingPunch(null);busy.current=false;setPending(false);}
   }
-  function mutate(action:string,payload:unknown,success?:string) { return execute({action,payload,mutationId:crypto.randomUUID(),expectedRevision:stateRef.current.revision},success); }
+  function mutate(action:string,payload:unknown,success?:string) { return execute({action,payload,mutationId:crypto.randomUUID(),expectedRevision:stateRef.current.revision,...(action==="punch"?{responseMode:"delta" as const,pressedAt:Math.round(Date.now()+offset.current)}:{})},success); }
   function go(next:View){setView(next);setMenu(false);if(next==="settings")setPrefs(state.preferences);}
-  function category(id:string){return state.categories.find(c=>c.id===id);}
+  function category(id:string){return categoryMap.get(id);}
   function addCategory(){setEditingCategory({id:crypto.randomUUID(),name:"",color:PALETTE[state.categories.length%PALETTE.length],hidden:false,archived:false,position:Math.max(-1,...state.categories.map(c=>c.position))+1});}
   function addSession(){const lastEnd=state.sessions.filter(s=>s.endedAt!==null&&s.endedAt<=now).reduce((v,s)=>Math.max(v,s.endedAt!),0);const end=running?running.startedAt:now;setEditingSession({id:crypto.randomUUID(),categoryId:state.categories.find(c=>!c.archived)?.id??"",startedAt:Math.min(end,Math.max(end-3600000,lastEnd)),endedAt:end,businessDay:today,dayStart:state.preferences.dayStart,timezone:state.preferences.timezone,memo:"",createdAt:now,updatedAt:now});}
   async function reorder(id:string,direction:number){const cats=state.categories.filter(c=>!c.archived);const i=cats.findIndex(c=>c.id===id),j=i+direction;if(j<0||j>=cats.length)return;[cats[i],cats[j]]=[cats[j],cats[i]];await mutate("reorder",{ids:cats.map(c=>c.id)});}
-  const daily=state.sessions.filter(s=>s.businessDay===today),dailyTotal=daily.reduce((v,s)=>v+duration(s,now),0);
-  const history=state.sessions.filter(s=>s.businessDay>=historyDay&&s.businessDay<=historyTo&&(!filter||s.categoryId===filter)&&(!query||`${category(s.categoryId)?.name??""} ${s.memo}`.toLowerCase().includes(query.toLowerCase())));
-  const [from,to]=periodRange(period,anchor),[prevFrom,prevTo]=periodRange(period,shiftPeriod(period,anchor,-1));
-  const selected=state.sessions.filter(s=>s.businessDay>=from&&s.businessDay<=to&&(!statsFilter||s.categoryId===statsFilter));
-  const previous=state.sessions.filter(s=>s.businessDay>=prevFrom&&s.businessDay<=prevTo&&(!statsFilter||s.categoryId===statsFilter));
-  const total=selected.reduce((v,s)=>v+duration(s,now),0),priorTotal=previous.reduce((v,s)=>v+duration(s,now),0);
-  const selectedRunning=selected.some(s=>s.endedAt===null);
-  const activeCats=state.categories.filter(c=>!c.archived);
+  const daily=useMemo(()=>state.sessions.filter(s=>s.businessDay===today),[state.sessions,today]);
+  const dailyBase=useMemo(()=>completedTotal(daily),[daily]);
+  const dailyTotal=dailyBase+(running?.businessDay===today?duration(running,now):0);
+  const history=useMemo(()=>state.sessions.filter(s=>s.businessDay>=historyDay&&s.businessDay<=historyTo&&(!filter||s.categoryId===filter)&&(!query||`${categoryMap.get(s.categoryId)?.name??""} ${s.memo}`.toLowerCase().includes(query.toLowerCase()))),[state.sessions,categoryMap,historyDay,historyTo,filter,query]);
+  const historyBase=useMemo(()=>completedTotal(history),[history]),historyRunning=useMemo(()=>history.find(s=>s.endedAt===null),[history]);
+  const [from,to]=useMemo(()=>periodRange(period,anchor),[period,anchor]),[prevFrom,prevTo]=useMemo(()=>periodRange(period,shiftPeriod(period,anchor,-1)),[period,anchor]);
+  const selected=useMemo(()=>state.sessions.filter(s=>s.businessDay>=from&&s.businessDay<=to&&(!statsFilter||s.categoryId===statsFilter)),[state.sessions,from,to,statsFilter]);
+  const previous=useMemo(()=>state.sessions.filter(s=>s.businessDay>=prevFrom&&s.businessDay<=prevTo&&(!statsFilter||s.categoryId===statsFilter)),[state.sessions,prevFrom,prevTo,statsFilter]);
+  const totalBase=useMemo(()=>completedTotal(selected),[selected]),priorBase=useMemo(()=>completedTotal(previous),[previous]);
+  const selectedActive=useMemo(()=>selected.find(s=>s.endedAt===null),[selected]),previousActive=useMemo(()=>previous.find(s=>s.endedAt===null),[previous]);
+  const total=totalBase+(selectedActive?duration(selectedActive,now):0),priorTotal=priorBase+(previousActive?duration(previousActive,now):0);
+  const selectedRunning=!!selectedActive;
+  const summaries=useMemo(()=>{
+    const values=new Map<string,{current:number;previous:number}>();
+    for(const [rows,key] of [[selected,"current"],[previous,"previous"]] as const)for(const s of rows){const value=values.get(s.categoryId)??{current:0,previous:0};if(s.endedAt!==null)value[key]+=duration(s,0);values.set(s.categoryId,value);}
+    return values;
+  },[selected,previous]);
+  const activeCats=useMemo(()=>state.categories.filter(c=>!c.archived),[state.categories]);
+  const dateFormatter=useMemo(()=>new Intl.DateTimeFormat("ja-JP",{timeZone:state.preferences.timezone,year:"numeric",month:"2-digit",day:"2-digit",weekday:"short"}),[state.preferences.timezone]);
   const theme=view==="settings"?prefs:state.preferences;
   const style={"--accent":theme.accent,"--accent-ink":contrastText(theme.accent),"--accent-link":readableColor(theme.accent),"--sidebar":theme.sidebar,"--sidebar-ink":contrastText(theme.sidebar)} as CSSProperties;
 
-  function recordTable(list:Session[],compact=false){return list.length?<div className="table-scroll"><table className={`record-table ${compact?"compact":""}`}><thead><tr>{!compact&&<th>日付</th>}<th>作業</th><th>開始</th><th>終了</th><th>時間</th><th className="memo-cell">メモ</th><th><span className="sr-only">編集</span></th></tr></thead><tbody>{list.map(s=><tr key={s.id}>{!compact&&<td className="date-cell">{s.businessDay.slice(5).replace("-","/")}</td>}<td><span className="category-name"><Dot color={category(s.categoryId)?.color??"#64748b"}/>{category(s.categoryId)?.name??"削除済み"}</span></td><td className="tabular">{clock(s.startedAt,s.timezone)}</td><td className="tabular">{s.endedAt===null?<span className="live-tag">計測中</span>:<>{wallParts(s.startedAt,s.timezone).date!==wallParts(s.endedAt,s.timezone).date&&<span className="next-day">翌日以降 </span>}{clock(s.endedAt,s.timezone)}</>}</td><td className="tabular duration-cell">{hms(duration(s,now))}</td><td className="memo-cell"><button className={`memo-button ${!s.memo?"muted":""}`} aria-label={s.memo?"メモを編集":"メモを追加"} onClick={()=>setEditingSession(s)}>{s.memo||<Plus size={14}/>}</button></td><td><button className="icon-button" aria-label={`${category(s.categoryId)?.name??"作業"}の記録を編集`} onClick={()=>setEditingSession(s)}><Pencil size={15}/></button></td></tr>)}</tbody></table></div>:<Empty/>;}
+  function recordTable(list:Session[],compact=false){return list.length?<div className="table-scroll"><table className={`record-table ${compact?"compact":""}`}><thead><tr>{!compact&&<th>日付</th>}<th>作業</th><th>開始</th><th>終了</th><th>時間</th><th className="memo-cell">メモ</th><th><span className="sr-only">編集</span></th></tr></thead><tbody>{list.map(s=><tr key={s.id}>{!compact&&<td className="date-cell">{s.businessDay.slice(5).replace("-","/")}</td>}<td><span className="category-name"><Dot color={category(s.categoryId)?.color??"#64748b"}/>{category(s.categoryId)?.name??"削除済み"}</span></td><td className="tabular">{clock(s.startedAt,s.timezone)}</td><td className="tabular">{s.endedAt===null?<span className="live-tag">{s.id.startsWith("pending:")?"保存中":"計測中"}</span>:<>{wallParts(s.startedAt,s.timezone).date!==wallParts(s.endedAt,s.timezone).date&&<span className="next-day">翌日以降 </span>}{clock(s.endedAt,s.timezone)}</>}</td><td className="tabular duration-cell">{hms(duration(s,now))}</td><td className="memo-cell"><button className={`memo-button ${!s.memo?"muted":""}`} aria-label={s.memo?"メモを編集":"メモを追加"} disabled={pending} onClick={()=>setEditingSession(s)}>{s.memo||<Plus size={14}/>}</button></td><td><button className="icon-button" aria-label={`${category(s.categoryId)?.name??"作業"}の記録を編集`} disabled={pending} onClick={()=>setEditingSession(s)}><Pencil size={15}/></button></td></tr>)}</tbody></table></div>:<Empty/>;}
   function exportRecords(){saveFile(csv([["日付","作業ID","作業","開始日時","終了日時","秒数","タイムゾーン","1日の開始","メモ","計測中"],...history.map(s=>[s.businessDay,s.categoryId,category(s.categoryId)?.name??"",new Date(s.startedAt).toISOString(),s.endedAt===null?"":new Date(s.endedAt).toISOString(),Math.floor(duration(s,now)/1000),s.timezone,dayStartLabel(s.dayStart),s.memo,s.endedAt===null?"はい":"いいえ"])]),`punch-in-records-${historyDay}.csv`,"text/csv;charset=utf-8");}
   function exportStats(){saveFile(csv([["期間開始","期間終了","作業ID","作業","秒数","時間","計測中を含む"],...state.categories.filter(c=>!statsFilter||c.id===statsFilter).map(c=>{const rows=selected.filter(s=>s.categoryId===c.id);const t=rows.reduce((v,s)=>v+duration(s,now),0);return[period==="all"?"全期間":from,period==="all"?"":to,c.id,c.name,Math.floor(t/1000),hms(t),rows.some(s=>s.endedAt===null)?"はい":"いいえ"]; }),[period==="all"?"全期間":from,period==="all"?"":to,"","合計",Math.floor(total/1000),hms(total),selectedRunning?"はい":"いいえ"]]),"punch-in-summary.csv","text/csv;charset=utf-8");}
   async function loadBackup(file:File){setBackup(null);setPreview(null);if(file.size>16_000_000){setToast({text:"ファイルは16MB以内にしてください",error:true});return;}try{const value=JSON.parse(await file.text()) as Backup;const result=await mutate("importPreview",{backup:value});if(result?.preview){setBackup(value);setPreview(result.preview);}}catch{setToast({text:"JSONファイルを読み込めません",error:true});}}
@@ -95,23 +142,23 @@ export default function PunchApp({initial,displayName}:{initial:AppState;display
       <div key={view} className={`page-content ${view==="punch"?"punch-content":""}`}>
       {view==="punch"&&<>
         <div className="punch-tools"><span className="activity-date">{today!==wallParts(now,state.preferences.timezone).date?`${readableDate(today)}の記録`:readableDate(today)}</span><button className="text-button" onClick={()=>go("categories")}><Settings2 size={15}/>ボタンを編集</button></div>
-        <section className="punch-stage" aria-label="打刻"><div className="clock-area"><div className="full-date">{new Intl.DateTimeFormat("ja-JP",{timeZone:state.preferences.timezone,year:"numeric",month:"2-digit",day:"2-digit",weekday:"short"}).format(now)}</div><div className="big-clock" aria-label={`現在時刻 ${clock(now,state.preferences.timezone,true)}`}><span>{clock(now,state.preferences.timezone)}</span><small>{String(wallParts(now,state.preferences.timezone).second).padStart(2,"0")}</small></div><div className={`current-state ${running?"is-running":""}`} style={runningCategory?{color:readableColor(runningCategory.color)}:undefined}>{running?<><span className="pulse-dot"/><span>{runningCategory?.name}</span><span className="running-elapsed">{hms(duration(running,now))}</span></>:<><span className="idle-dot"/>未計測</>}</div>{running&&<button className="running-memo" onClick={()=>setEditingSession(running)}><Pencil size={13}/>{running.memo||"メモを追加"}</button>}</div>
-        <div className={`punch-buttons ${activeCats.filter(c=>!c.hidden).length===1?"single-button":""}`}>{activeCats.filter(c=>!c.hidden).map(c=><button key={c.id} className={`punch-button ${running?.categoryId===c.id?"recording":""}`} style={{"--category":c.color,"--category-stroke":readableColor(c.color,3),"--category-text":readableColor(c.color),"--category-ink":contrastText(c.color)} as CSSProperties} disabled={pending} onClick={()=>void mutate("punch",{categoryId:c.id},running?.categoryId===c.id?`${c.name}を終了しました`:`${c.name}を開始しました`)} aria-label={`${c.name}を${running?.categoryId===c.id?"終了":"開始"}`} aria-pressed={running?.categoryId===c.id}><span className="punch-action">{pending?<LoaderCircle size={15} className="spin"/>:running?.categoryId===c.id?<Square size={14} fill="currentColor"/>:<Play size={15}/>}</span><span>{c.name}</span>{running?.categoryId===c.id&&<span className="punch-running-label">計測中</span>}</button>)}<button className="punch-add" onClick={addCategory} aria-label="作業の種類を追加"><Plus size={23}/></button></div></section>
+        <section className="punch-stage" aria-label="打刻"><div className="clock-area"><div className="full-date">{dateFormatter.format(now)}</div><div className="big-clock" aria-label={`現在時刻 ${clock(now,state.preferences.timezone,true)}`}><span>{clock(now,state.preferences.timezone)}</span><small>{String(wallParts(now,state.preferences.timezone).second).padStart(2,"0")}</small></div><div className={`current-state ${running?"is-running":""}`} style={runningCategory?{color:readableColor(runningCategory.color)}:undefined}>{running?<><span className="pulse-dot"/><span>{runningCategory?.name}</span><span className="running-elapsed">{hms(duration(running,now))}</span></>:<><span className="idle-dot"/>未計測</>}</div>{running&&<button className="running-memo" disabled={pending} onClick={()=>setEditingSession(running)}><Pencil size={13}/>{running.memo||"メモを追加"}</button>}</div>
+        <div className={`punch-buttons ${activeCats.filter(c=>!c.hidden).length===1?"single-button":""}`}>{activeCats.filter(c=>!c.hidden).map(c=><button key={c.id} className={`punch-button ${running?.categoryId===c.id?"recording":""}`} style={{"--category":c.color,"--category-stroke":readableColor(c.color,3),"--category-text":readableColor(c.color),"--category-ink":contrastText(c.color)} as CSSProperties} disabled={pending} onClick={()=>void mutate("punch",{categoryId:c.id},running?.categoryId===c.id?`${c.name}を終了しました`:`${c.name}を開始しました`)} aria-label={`${c.name}を${running?.categoryId===c.id?"終了":"開始"}`} aria-pressed={running?.categoryId===c.id} aria-busy={pendingPunch?.categoryId===c.id||undefined}><span className="punch-action">{pendingPunch?.categoryId===c.id?<LoaderCircle size={15} className="spin"/>:running?.categoryId===c.id?<Square size={14} fill="currentColor"/>:<Play size={15}/>}</span><span>{c.name}</span>{(running?.categoryId===c.id||pendingPunch?.categoryId===c.id)&&<span className="punch-running-label">{pendingPunch?.categoryId===c.id?"保存中":"計測中"}</span>}</button>)}<button className="punch-add" onClick={addCategory} aria-label="作業の種類を追加"><Plus size={23}/></button></div></section>
         {running&&runningCategory?.hidden&&<div className="notice">非表示の作業「{runningCategory.name}」を計測中です<button className="text-button" disabled={pending} onClick={()=>void mutate("punch",{categoryId:runningCategory.id},"計測を終了しました")}>終了する</button></div>}
         <section className="today-records"><div className="section-heading"><h2>今日の記録</h2><button className="text-button" onClick={()=>{setHistoryDay(today);setHistoryTo(today);go("history");}}>履歴を見る<ArrowRight size={15}/></button></div>{recordTable(daily.slice(0,5),true)}{daily.length>5&&<button className="more-button" onClick={()=>{setHistoryDay(today);setHistoryTo(today);go("history");}}>すべての記録を見る</button>}</section>
       </>}
       {view==="history"&&<>
         <div className="toolbar"><div className="date-navigation"><button className="icon-button" aria-label="前日" onClick={()=>{const d=shiftDay(historyDay,-1);setHistoryDay(d);setHistoryTo(d);setPage(0);}}><ChevronLeft size={19}/></button><input aria-label="履歴の開始日" type="date" value={historyDay} onChange={e=>{if(!e.target.value)return;setHistoryDay(e.target.value);if(e.target.value>historyTo)setHistoryTo(e.target.value);setPage(0);}}/><span className="date-dash">—</span><input aria-label="履歴の終了日" type="date" value={historyTo} min={historyDay} onChange={e=>{if(!e.target.value)return;setHistoryTo(e.target.value);setPage(0);}}/><button className="icon-button" aria-label="翌日" onClick={()=>{const d=shiftDay(historyDay,1);setHistoryDay(d);setHistoryTo(d);setPage(0);}}><ChevronRight size={19}/></button><button className="subtle-button" onClick={()=>{setHistoryDay(today);setHistoryTo(today);setPage(0);}}>今日</button></div><button className="primary-button" onClick={addSession}><Plus size={16}/>記録を追加</button></div>
         <div className="filter-bar"><label className="search-field"><Search size={17}/><input placeholder="作業・メモを検索" aria-label="作業・メモを検索" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/></label><select aria-label="作業で絞り込み" value={filter} onChange={e=>{setFilter(e.target.value);setPage(0);}}><option value="">すべての作業</option>{state.categories.map(c=><option key={c.id} value={c.id}>{c.name}{c.archived?"（削除済み）":""}</option>)}</select><button className="text-button export-button" onClick={exportRecords}><Download size={16}/>CSV</button></div>
-        {historyDay===historyTo&&<Timeline sessions={history} categories={state.categories} now={now} dayStart={state.preferences.dayStart} onEdit={setEditingSession}/>}
-        <section className="history-records"><div className="section-heading"><h2>{historyDay===historyTo?readableDate(historyDay):"記録一覧"}</h2><span className="section-total">{hoursMinutes(history.reduce((v,s)=>v+duration(s,now),0))}</span></div>{recordTable(history.slice(page*20,page*20+20))}<div className="pagination"><span>{history.length}件</span>{history.length>20&&<><button className="icon-button" disabled={page===0} onClick={()=>setPage(page-1)} aria-label="前のページ"><ChevronLeft size={18}/></button><span>{page+1} / {Math.ceil(history.length/20)}</span><button className="icon-button" disabled={(page+1)*20>=history.length} onClick={()=>setPage(page+1)} aria-label="次のページ"><ChevronRight size={18}/></button></>}</div></section>
+        {historyDay===historyTo&&<Timeline sessions={history} categories={state.categories} now={historyRunning?now:0} dayStart={state.preferences.dayStart} onEdit={setEditingSession}/>}
+        <section className="history-records"><div className="section-heading"><h2>{historyDay===historyTo?readableDate(historyDay):"記録一覧"}</h2><span className="section-total">{hoursMinutes(historyBase+(historyRunning?duration(historyRunning,now):0))}</span></div>{recordTable(history.slice(page*20,page*20+20))}<div className="pagination"><span>{history.length}件</span>{history.length>20&&<><button className="icon-button" disabled={page===0} onClick={()=>setPage(page-1)} aria-label="前のページ"><ChevronLeft size={18}/></button><span>{page+1} / {Math.ceil(history.length/20)}</span><button className="icon-button" disabled={(page+1)*20>=history.length} onClick={()=>setPage(page+1)} aria-label="次のページ"><ChevronRight size={18}/></button></>}</div></section>
       </>}
       {view==="stats"&&<>
         <div className="toolbar stats-toolbar"><div className="segmented">{PERIODS.map(p=><button key={p.id} className={period===p.id?"selected":""} onClick={()=>setPeriod(p.id)}>{p.label}</button>)}</div><div className="toolbar-actions"><select aria-label="集計する作業" value={statsFilter} onChange={e=>setStatsFilter(e.target.value)}><option value="">すべての作業</option>{state.categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><button className="text-button" onClick={exportStats}><Download size={16}/>CSV</button></div></div>
         {period!=="all"&&<div className="stats-date"><button className="icon-button" aria-label="前の期間" onClick={()=>setAnchor(shiftPeriod(period,anchor,-1))}><ChevronLeft size={20}/></button><label>{period==="day"?readableDate(anchor):period==="week"?`${from.replaceAll("-","/")} — ${to.slice(5).replace("-","/")}`:period==="month"?`${anchor.slice(0,4)}年${Number(anchor.slice(5,7))}月`:`${anchor.slice(0,4)}年`}<input className="anchor-input" aria-label="集計の基準日" type="date" value={anchor} onChange={e=>{if(e.target.value)setAnchor(e.target.value);}}/></label><button className="icon-button" aria-label="次の期間" onClick={()=>setAnchor(shiftPeriod(period,anchor,1))}><ChevronRight size={20}/></button><button className="subtle-button" onClick={()=>setAnchor(today)}>今{period==="day"?"日":period==="week"?"週":period==="month"?"月":"年"}</button></div>}
         <section className="stats-total"><span>合計時間{selectedRunning&&<span className="live-tag">計測中を含む</span>}</span><div><strong>{Math.floor(total/3600000).toLocaleString("ja-JP")}<small>時間</small>{String(Math.floor(total/60000)%60).padStart(2,"0")}<small>分</small></strong>{period!=="all"&&<span className="comparison">前{period==="day"?"日":period==="week"?"週":period==="month"?"月":"年"} {hoursMinutes(priorTotal)}<b className={total>=priorTotal?"positive":""}>{priorTotal>0?`${total>=priorTotal?"+":""}${Math.round((total-priorTotal)/priorTotal*100)}%`:"—"}</b></span>}</div></section>
-        <StatsChart sessions={selected} categories={state.categories} now={now} period={period} from={from} to={to}/>
-        <section className="category-summary"><div className="section-heading"><h2>作業別</h2></div>{state.categories.filter(c=>(!statsFilter||c.id===statsFilter)&&(!c.archived||selected.some(s=>s.categoryId===c.id))).map(c=>{const t=selected.filter(s=>s.categoryId===c.id).reduce((v,s)=>v+duration(s,now),0);const p=previous.filter(s=>s.categoryId===c.id).reduce((v,s)=>v+duration(s,now),0);return <div className="summary-row" key={c.id}><span className="category-name"><Dot color={c.color}/>{c.name}</span><div className="summary-track"><span style={{width:`${total?t/total*100:0}%`,background:c.color}}/></div><strong>{hoursMinutes(t)}</strong><span className="summary-percent">{total?Math.round(t/total*100):0}%</span>{period!=="all"&&<span className="summary-prior">前期間 {hoursMinutes(p)}</span>}</div>;})}</section>
+        <StatsChart sessions={selected} categories={state.categories} now={selectedRunning?now:0} period={period} from={from} to={to}/>
+        <section className="category-summary"><div className="section-heading"><h2>作業別</h2></div>{state.categories.filter(c=>(!statsFilter||c.id===statsFilter)&&(!c.archived||selected.some(s=>s.categoryId===c.id))).map(c=>{const summary=summaries.get(c.id);const t=(summary?.current??0)+(selectedActive?.categoryId===c.id?duration(selectedActive,now):0);const p=(summary?.previous??0)+(previousActive?.categoryId===c.id?duration(previousActive,now):0);return <div className="summary-row" key={c.id}><span className="category-name"><Dot color={c.color}/>{c.name}</span><div className="summary-track"><span style={{width:`${total?t/total*100:0}%`,background:c.color}}/></div><strong>{hoursMinutes(t)}</strong><span className="summary-percent">{total?Math.round(t/total*100):0}%</span>{period!=="all"&&<span className="summary-prior">前期間 {hoursMinutes(p)}</span>}</div>;})}</section>
       </>}
       {view==="categories"&&<>
         <div className="toolbar"><span>{activeCats.length}種類</span><button className="primary-button" onClick={addCategory}><Plus size={16}/>作業を追加</button></div>
@@ -142,7 +189,7 @@ function SessionEditor({value,categories,pending,exists,errorMessage,close,save,
   function submit(e:FormEvent){e.preventDefault();try{const startedAt=fromTimeInput(start,value.timezone),endedAt=end?fromTimeInput(end,value.timezone):null;if(endedAt!==null&&endedAt<startedAt)throw new Error("終了時刻は開始時刻以降にしてください");setError("");void save({...value,categoryId,startedAt,endedAt,memo});}catch(e){setError((e as Error).message);}}
   return <Modal title={exists?"記録を編集":"記録を追加"} close={close}><form onSubmit={submit}><label className="field">作業<select value={categoryId} required onChange={e=>setCategoryId(e.target.value)}><option value="" disabled>選択してください</option>{categories.filter(c=>!c.archived||c.id===value.categoryId).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label className="field">開始<input type="datetime-local" step="1" required value={start} onChange={e=>setStart(e.target.value)}/></label><label className="field">終了<input type="datetime-local" step="1" value={end} onChange={e=>setEnd(e.target.value)}/></label><p className="field-note">{value.timezone}・終了が空欄の場合は計測中</p><label className="field">メモ<textarea maxLength={2000} rows={3} value={memo} onChange={e=>setMemo(e.target.value)}/></label>{(error||errorMessage)&&<p role="alert" className="form-error">{error||errorMessage}</p>}<div className="modal-actions">{exists&&<button type="button" className="icon-button danger delete-record" onClick={remove} aria-label="この記録を削除"><Trash2 size={19}/></button>}<button type="button" className="outline-button" onClick={close}>キャンセル</button><button className="primary-button" disabled={pending}>{pending?<LoaderCircle size={16} className="spin"/>:<Check size={16}/>}保存する</button></div></form></Modal>;
 }
-function Timeline({sessions,categories,now,dayStart,onEdit}:{sessions:Session[];categories:Category[];now:number;dayStart:number;onEdit:(s:Session)=>void}) {
+const Timeline=memo(function Timeline({sessions,categories,now,dayStart,onEdit}:{sessions:Session[];categories:Category[];now:number;dayStart:number;onEdit:(s:Session)=>void}) {
   if(!sessions.length)return null;
   const sorted=[...sessions].sort((a,b)=>a.startedAt-b.startedAt);
   // Each entry keeps its original cutoff and timezone, even after settings change.
@@ -151,12 +198,17 @@ function Timeline({sessions,categories,now,dayStart,onEdit}:{sessions:Session[];
   const spans=sorted.map(s=>({s,start:(s.startedAt-origin)/3600000,end:((s.endedAt??now)-origin)/3600000}));
   const max=Math.max(24,...spans.map(v=>v.end));const width=Math.ceil(max/6)*6;
   return <section className="timeline-section"><div className="section-heading"><h2>タイムライン</h2></div><div className="timeline-scroll"><div className="timeline" style={{minWidth:480}}><div className="timeline-axis"><span/>{Array.from({length:5},(_,i)=>{const stamp=origin+width/4*i*3600000;const days=Math.round((Date.parse(wallParts(stamp,zone).date)-Date.parse(wallParts(origin,zone).date))/86400000);return <span key={i}>{clock(stamp,zone)}{days>0&&<small> +{days}</small>}</span>;})}</div>{spans.map(({s,start,end})=>{const c=categories.find(c=>c.id===s.categoryId);return <div className="timeline-row" key={s.id}><span>{c?.name}</span><div className="timeline-track"><button onClick={()=>onEdit(s)} className={s.endedAt===null?"running-bar":""} aria-label={`${c?.name} ${clock(s.startedAt,s.timezone)}から${s.endedAt===null?"計測中":clock(s.endedAt,s.timezone)} ${hoursMinutes(duration(s,now))}`} title={`${clock(s.startedAt,s.timezone)} — ${s.endedAt===null?"計測中":clock(s.endedAt,s.timezone)}`} style={{left:`${start/width*100}%`,width:`${Math.max(.6,(end-start)/width*100)}%`,background:c?.color}}/></div></div>;})}</div></div></section>;
-}
-function StatsChart({sessions,categories,now,period,from,to}:{sessions:Session[];categories:Category[];now:number;period:Period;from:string;to:string}) {
+});
+const StatsChart=memo(function StatsChart({sessions,categories,now,period,from,to}:{sessions:Session[];categories:Category[];now:number;period:Period;from:string;to:string}) {
   const monthly=period==="year"||period==="all";
-  const buckets=new Map<string,Map<string,number>>();
-  if(period!=="all") {let d=from;let count=0;while(d<=to&&count++<370){const key=monthly?d.slice(0,7):d;if(!buckets.has(key))buckets.set(key,new Map());d=shiftDay(d,1);}}
-  for(const s of sessions){const key=monthly?s.businessDay.slice(0,7):s.businessDay;if(!buckets.has(key))buckets.set(key,new Map());const bucket=buckets.get(key)!;bucket.set(s.categoryId,(bucket.get(s.categoryId)??0)+duration(s,now));}
-  const entries=[...buckets.entries()].sort(([a],[b])=>a.localeCompare(b));const max=Math.ceil(Math.max(3600000,...entries.map(([,b])=>[...b.values()].reduce((a,b)=>a+b,0)))/3600000)*3600000;
+  const base=useMemo(()=>{
+    const buckets=new Map<string,Map<string,number>>();
+    if(period!=="all"){let d=from,count=0;while(d<=to&&count++<370){const key=monthly?d.slice(0,7):d;if(!buckets.has(key))buckets.set(key,new Map());d=shiftDay(d,1);}}
+    for(const s of sessions){const key=monthly?s.businessDay.slice(0,7):s.businessDay;if(!buckets.has(key))buckets.set(key,new Map());if(s.endedAt!==null){const bucket=buckets.get(key)!;bucket.set(s.categoryId,(bucket.get(s.categoryId)??0)+duration(s,0));}}
+    return [...buckets.entries()].sort(([a],[b])=>a.localeCompare(b));
+  },[sessions,period,from,to,monthly]);
+  const active=useMemo(()=>sessions.find(s=>s.endedAt===null),[sessions]);
+  const entries=active?base.map(([key,bucket]):[string,Map<string,number>]=>{if(key!==(monthly?active.businessDay.slice(0,7):active.businessDay))return[key,bucket];const live=new Map(bucket);live.set(active.categoryId,(live.get(active.categoryId)??0)+duration(active,now));return[key,live];}):base;
+  const max=Math.ceil(Math.max(3600000,...entries.map(([,b])=>[...b.values()].reduce((a,b)=>a+b,0)))/3600000)*3600000;
   return <section className="stats-chart"><div className="chart-scale"><span>{Math.ceil(max/3600000)}h</span><span>{Math.ceil(max/3600000)/2}h</span><span>0</span></div><div className="chart-scroll"><div className="chart-plot" style={{minWidth:Math.max(400,entries.length*27)}}>{entries.length?entries.map(([key,b])=><div className="chart-column" key={key}><div className="chart-stack" title={`${key} ${hoursMinutes([...b.values()].reduce((a,b)=>a+b,0))}`}>{categories.map(c=>{const value=b.get(c.id)??0;return value>0?<span key={c.id} style={{height:`${value/max*100}%`,background:c.color}} aria-label={`${key} ${c.name} ${hoursMinutes(value)}`}/>:null;})}</div><span className="chart-label">{monthly?`${Number(key.slice(5,7))}月`:period==="day"?`${Number(key.slice(5,7))}/${Number(key.slice(8))}`:Number(key.slice(8))}</span></div>):<Empty/>}</div></div></section>;
-}
+});

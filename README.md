@@ -27,6 +27,8 @@ npm run dev
 npm run typecheck
 npm test
 npm run test:api # ローカル開発サーバー起動中。テスト用の種類・記録を作成する
+npm run test:punch-api # ビルド済みWorkerで差分応答・再試行・条件付き取得を検証
+PERF_RECORDS=5000 npm run test:punch-api # 検証用データを作り通信量・待ち時間を比較
 npm run test:isolation # npm start -- --port 8787 で起動したビルド済みWorkerに対して実行
 npm run build
 ```
@@ -39,6 +41,7 @@ npmのキャッシュが書き込み不可の場合は、`npm_config_cache=/tmp/
 |---|---|
 | `app/punch-app.tsx`, `app/globals.css` | クラウド勤怠Plusを参考にしたレスポンシブUI |
 | `app/api/` | 認証済みAPI |
+| `lib/punch-server.ts`, `lib/punch-state.ts` | 打刻の差分処理・即時仮表示・確定値への反映 |
 | `lib/server.ts` | 所有者スコープ、楽観ロック、atomic batchによる書き込み |
 | `lib/time.ts` | 日付、タイムゾーン、期間、経過時間の純粋関数 |
 | `lib/records.ts`, `lib/validation.ts` | 時間重複、取り込み検証 |

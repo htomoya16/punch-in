@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getChatGPTUser } from "../app/chatgpt-auth";
 import { type AppState, type Backup, type Category, type Preferences, type Session } from "./model";
 import { bootstrapQueries } from "./bootstrap";
+import { performPunch, sessionFromRow } from "./punch-server";
 import { categorySchema, preferenceSchema, sessionSchema } from "./validation";
 import { businessDay } from "./time";
 
@@ -26,20 +27,25 @@ export async function readState(user: string): Promise<AppState> {
   return {
     preferences: { timezone:String(p.timezone),dayStart:Number(p.day_start),accent:String(p.accent),sidebar:String(p.sidebar),reminderEnabled:!!p.reminder_enabled,reminderMinutes:Number(p.reminder_minutes) },
     categories: cr.results.map(c => ({ ...c, hidden:!!c.hidden,archived:!!c.archived })) as Category[],
-    sessions: sr.results.map(s => ({id:s.id,categoryId:s.category_id,startedAt:s.started_at,endedAt:s.ended_at,businessDay:s.business_day,dayStart:s.day_start,timezone:s.timezone,memo:s.memo,createdAt:s.created_at,updatedAt:s.updated_at})) as Session[],
+    sessions: sr.results.map(sessionFromRow),
     revision:Number(p.revision), serverNow:Date.now(),
   };
 }
-const envelopeSchema = z.object({ action:z.enum(["punch","category","archiveCategory","reorder","preferences","session","deleteSession","importPreview","import"]), payload:z.unknown(), expectedRevision:z.number().int().min(0), mutationId:z.string().uuid() });
+const envelopeSchema = z.object({ action:z.enum(["punch","category","archiveCategory","reorder","preferences","session","deleteSession","importPreview","import"]), payload:z.unknown(), responseMode:z.enum(["state","delta"]).default("state"), pressedAt:z.number().int().nonnegative().optional(), expectedRevision:z.number().int().min(0), mutationId:z.string().uuid() });
 function requireCategory(state: AppState, id: string, allowArchived = false) { const c=state.categories.find(c=>c.id===id && (allowArchived || !c.archived)); if(!c) throw new HttpError(400,"作業の種類が見つかりません"); return c; }
-export async function action(request: Request, user: string) {
+export async function action(request: Request, user: string, receivedAt = Date.now()) {
   const origin=request.headers.get("origin");
   if((origin && origin!==new URL(request.url).origin) || request.headers.get("sec-fetch-site")==="cross-site") throw new HttpError(403,"この画面から操作してください");
   if(!request.headers.get("content-type")?.includes("application/json")) throw new HttpError(415,"JSON形式で送信してください");
   if(Number(request.headers.get("content-length"))>16_000_000) throw new HttpError(413,"ファイルは16MB以内にしてください");
   const body=await request.text(); if(body.length>16_000_000) throw new HttpError(413,"ファイルは16MB以内にしてください");
   let raw: unknown; try { raw=JSON.parse(body); } catch { throw new HttpError(400,"JSONを読み込めません"); }
-  const input=envelopeSchema.parse(raw); const state=await readState(user); const d=db();
+  const input=envelopeSchema.parse(raw); const d=db();
+  if(input.action==="punch") {
+    const delta=await performPunch(d,user,input,receivedAt);
+    return delta && input.responseMode==="delta" ? {punchDelta:delta} : {state:await readState(user)};
+  }
+  const state=await readState(user);
   if(input.action==="importPreview") { const p=z.object({backup:z.unknown()}).parse(input.payload); return {preview:planImport(state,p.backup).preview}; }
   const last=await d.prepare("SELECT mutation_token FROM preferences WHERE user_id=?").bind(user).first<{mutation_token:string}>();
   if(last?.mutation_token===input.mutationId) return {state};
@@ -51,12 +57,7 @@ export async function action(request: Request, user: string) {
   function insert(s: Session) { write(`INSERT INTO sessions (user_id,id,category_id,started_at,ended_at,business_day,day_start,timezone,memo,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${guard}`, [user,s.id,s.categoryId,s.startedAt,s.endedAt,s.businessDay,s.dayStart,s.timezone,s.memo,s.createdAt,s.updatedAt]); }
   function savePrefs(p:Preferences) { write(`UPDATE preferences SET timezone=?,day_start=?,accent=?,sidebar=?,reminder_enabled=?,reminder_minutes=? WHERE user_id=? AND ${guard}`,[p.timezone,p.dayStart,p.accent,p.sidebar,+p.reminderEnabled,p.reminderMinutes,user]); }
   const now=Date.now();
-  if(input.action==="punch") {
-    const {categoryId}=z.object({categoryId:z.string()}).parse(input.payload); requireCategory(state,categoryId);
-    const running=state.sessions.find(s=>s.endedAt===null);
-    if(running) write(`UPDATE sessions SET ended_at=?,updated_at=? WHERE user_id=? AND id=? AND ${guard}`,[now,now,user,running.id]);
-    if(running?.categoryId!==categoryId) insert({id:crypto.randomUUID(),categoryId,startedAt:now,endedAt:null,businessDay:businessDay(now,state.preferences.dayStart,state.preferences.timezone),dayStart:state.preferences.dayStart,timezone:state.preferences.timezone,memo:"",createdAt:now,updatedAt:now});
-  } else if(input.action==="category") {
+  if(input.action==="category") {
     const c=categorySchema.parse(input.payload);
     if(!state.categories.some(x=>x.id===c.id) && state.categories.length>=500) throw new HttpError(400,"作業の種類は500件までです");
     if(c.archived) throw new HttpError(400,"削除操作を使用してください");
@@ -96,4 +97,10 @@ export async function action(request: Request, user: string) {
 }
 export function makeBackup(state: AppState): Backup { return {format:"punch-in",version:1,exportedAt:new Date().toISOString(),preferences:state.preferences,categories:state.categories,sessions:state.sessions}; }
 export async function api(handler:()=>Promise<Response>) { try { return await handler(); } catch(e) { if(e instanceof HttpError) return Response.json({error:e.message},{status:e.status}); if(e instanceof z.ZodError) return Response.json({error:e.issues.map(x=>x.message).slice(0,3).join(" / ")},{status:400}); console.error("Punch in request failed",e); return Response.json({error:"保存できませんでした。時間をおいて再試行してください"},{status:500}); } }
-export function json(data:unknown) { return Response.json(data,{headers:{"Cache-Control":"no-store"}}); }
+export function json(data:unknown, headers:Record<string,string> = {}) { return Response.json(data,{headers:{"Cache-Control":"no-store",...headers}}); }
+export async function stateResponse(user:string, revision?:number) {
+  const current=await db().prepare("SELECT revision,seeded FROM preferences WHERE user_id=?").bind(user).first<{revision:number;seeded:number}>();
+  if(!current || current.seeded<2) await initialize(user);
+  else if(revision===current.revision) return new Response(null,{status:304,headers:{"Cache-Control":"no-store","X-Server-Now":String(Date.now())}});
+  return json(await readState(user));
+}

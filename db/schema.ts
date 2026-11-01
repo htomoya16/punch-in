@@ -24,6 +24,7 @@ export const sessions = sqliteTable("sessions", {
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, t => [
   primaryKey({ columns: [t.userId, t.id] }), index("sessions_by_day").on(t.userId, t.businessDay),
+  index("sessions_by_start").on(t.userId, t.startedAt),
   uniqueIndex("one_running_session").on(t.userId).where(sql`${t.endedAt} IS NULL`),
   check("positive_duration", sql`${t.endedAt} IS NULL OR ${t.endedAt} >= ${t.startedAt}`),
 ]);

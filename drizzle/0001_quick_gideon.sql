@@ -1,0 +1,1 @@
+CREATE INDEX `sessions_by_start` ON `sessions` (`user_id`,`started_at`);

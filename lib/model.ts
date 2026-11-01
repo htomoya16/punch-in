@@ -5,6 +5,8 @@ export type Session = {
   dayStart: number; timezone: string; memo: string; createdAt: number; updatedAt: number;
 };
 export type AppState = { preferences: Preferences; categories: Category[]; sessions: Session[]; revision: number; serverNow: number };
+export type PunchDelta = { baseRevision: number; revision: number; sessions: Session[]; serverNow: number };
+export type PendingPunch = { categoryId: string; mutationId: string; baseRevision: number; at: number };
 export type Backup = { format: "punch-in"; version: 1; exportedAt: string; preferences: Preferences; categories: Category[]; sessions: Session[] };
 export const DEFAULT_CATEGORIES = [
   { id: "punch", name: "打刻", color: "#168ab5" },

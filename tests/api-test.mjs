@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 const base=process.env.TEST_BASE_URL??'http://127.0.0.1:5173';
 if(!['127.0.0.1','localhost'].includes(new URL(base).hostname))throw new Error('API tests are local-only');
-const login=await fetch(base+'/signin-with-chatgpt?return_to=/',{redirect:'manual'});
-const cookie=login.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
-assert.ok(cookie,'local mock auth cookie');
-async function get(path,auth=true){const r=await fetch(base+path,{headers:auth?{cookie}:{}});return{status:r.status,data:await r.json()};}
-async function post(job,extra={}){const r=await fetch(base+'/api/action',{method:'POST',headers:{'Content-Type':'application/json',cookie,Origin:base,...extra},body:JSON.stringify(job)});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data={error:text};}return{status:r.status,data};}
+const actor=process.env.TEST_AUTH_ID;
+let authHeaders;
+if(actor)authHeaders={'oai-authenticated-user-id':actor,'oai-authenticated-user-email':actor+'@sites.test'};
+else{const login=await fetch(base+'/signin-with-chatgpt?return_to=/',{redirect:'manual'});const cookie=login.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');assert.ok(cookie,'local mock auth cookie');authHeaders={cookie};}
+async function get(path,auth=true){const r=await fetch(base+path,{headers:auth?authHeaders:{}});return{status:r.status,data:await r.json()};}
+async function post(job,extra={}){const r=await fetch(base+'/api/action',{method:'POST',headers:{'Content-Type':'application/json',...authHeaders,Origin:base,...extra},body:JSON.stringify(job)});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data={error:text};}return{status:r.status,data};}
 let state=(await get('/api/state')).data;
 const initialPrefs={...state.preferences};
 const initialOrder=state.categories.filter(c=>!c.archived).map(c=>c.id);

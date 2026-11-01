@@ -4,7 +4,7 @@
 
 ## GET /api/state
 
-`{ preferences, categories, sessions, revision, serverNow }` を返す。preferencesは個人設定、categoriesはアーカイブ済みを含む種類、sessionsは全記録。serverNowはサーバーのUnixミリ秒。
+`{ preferences, categories, sessions, revision, serverNow }` を返す。`?revision=N` を付け、本人のrevisionが一致する場合は304（本文なし、X-Server-Nowで時刻を返す）になる。preferencesは個人設定、categoriesはアーカイブ済みを含む種類、sessionsは全記録。serverNowはサーバーのUnixミリ秒。
 
 ## POST /api/action
 
@@ -19,7 +19,17 @@ Content-Type: application/json。ブラウザからのクロスサイトリク�
 }
 ```
 
-成功は `{ "state": ... }`。importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCategories": 0, "skippedSessions": 0, "running": false} }`。
+成功は `{ "state": ... }`。打刻にはルートフィールド `responseMode: "delta"` を指定でき、通常は次の差分だけを返す。
+
+```json
+{"punchDelta":{"baseRevision":0,"revision":1,"sessions":[],"serverNow":1793556000000}}
+```
+
+sessionsは実際に開始・終了した最大2件。クライアントはbaseRevision一致時だけ差分を反映し、それより新しい確定データを古い応答で上書きしない。revisionに欠落があれば全体を再取得する。直前の同じmutationIdの再試行では、処理を繰り返さず `{state}` を返す。
+
+打刻のルートフィールド `pressedAt` は任意のUnixミリ秒。クライアントはサーバーとの時刻差を補正して送信する。サーバーは受信前60秒〜受信後2秒の整数のみ受け入れ、未来は受信時刻へ切り詰める。範囲外・省略は受信時刻を使う。直近の開始・終了より前にならないよう調整する。APIレスポンスのServer-Timingはサーバー内の処理時間を示す。
+
+importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCategories": 0, "skippedSessions": 0, "running": false} }`。
 
 | action | payload |
 |---|---|

@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { getChatGPTUser } from "../app/chatgpt-auth";
-import { DEFAULT_CATEGORIES, type AppState, type Backup, type Category, type Preferences, type Session } from "./model";
+import { type AppState, type Backup, type Category, type Preferences, type Session } from "./model";
+import { bootstrapQueries } from "./bootstrap";
 import { categorySchema, preferenceSchema, sessionSchema } from "./validation";
 import { businessDay } from "./time";
 
@@ -11,12 +12,8 @@ function db() { if (!env.DB) throw new Error("Database unavailable"); return env
 export async function userId() { const u = await getChatGPTUser(); if (!u) throw new HttpError(401,"ログインしてください"); return u.userId; }
 export async function initialize(user: string) {
   const d = db();
-  if (await d.prepare("SELECT 1 FROM preferences WHERE user_id=? AND seeded=1").bind(user).first()) return;
-  await d.batch([
-    d.prepare("INSERT INTO preferences (user_id) VALUES (?) ON CONFLICT DO NOTHING").bind(user),
-    ...DEFAULT_CATEGORIES.map((c,i) => d.prepare("INSERT INTO categories (user_id,id,name,color,position) SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND seeded=0) ON CONFLICT DO NOTHING").bind(user,c.id,c.name,c.color,i,user)),
-    d.prepare("UPDATE preferences SET seeded=1 WHERE user_id=? AND seeded=0").bind(user),
-  ]);
+  if (await d.prepare("SELECT 1 FROM preferences WHERE user_id=? AND seeded>=2").bind(user).first()) return;
+  await d.batch(bootstrapQueries(user).map(q => d.prepare(q.sql).bind(...q.values)));
 }
 export async function readState(user: string): Promise<AppState> {
   const d = db();

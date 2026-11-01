@@ -50,7 +50,7 @@ Content-Type: application/json。ブラウザからのクロスサイトリク�
     "timezone": "Asia/Tokyo",
     "dayStart": 300,
     "accent": "#168ab5",
-    "sidebar": "#272c34",
+    "sidebar": "#000000",
     "reminderEnabled": false,
     "reminderMinutes": 360
   },

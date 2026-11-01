@@ -9,6 +9,7 @@ async function get(path,auth=true){const r=await fetch(base+path,{headers:auth?{
 async function post(job,extra={}){const r=await fetch(base+'/api/action',{method:'POST',headers:{'Content-Type':'application/json',cookie,Origin:base,...extra},body:JSON.stringify(job)});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data={error:text};}return{status:r.status,data};}
 let state=(await get('/api/state')).data;
 const initialPrefs={...state.preferences};
+const initialOrder=state.categories.filter(c=>!c.archived).map(c=>c.id);
 let passed=0;
 const ids=[];const categoryId='api-test-'+randomUUID();
 function check(name){passed++;console.log('ok',passed,'-',name);}
@@ -47,5 +48,5 @@ try {
   for(const id of ids)if(state.sessions.some(s=>s.id===id))await act('deleteSession',{id});
   const c=state.categories.find(c=>c.id===categoryId);if(c&&!c.archived)await act('archiveCategory',{id:categoryId});
   if(JSON.stringify(state.preferences)!==JSON.stringify(initialPrefs))await act('preferences',initialPrefs);
-  const order=state.categories.filter(c=>!c.archived).sort((a,b)=>['research','development','career','study'].indexOf(a.id)-['research','development','career','study'].indexOf(b.id)).map(c=>c.id);await act('reorder',{ids:order});
+  const order=state.categories.filter(c=>!c.archived).sort((a,b)=>initialOrder.indexOf(a.id)-initialOrder.indexOf(b.id)).map(c=>c.id);await act('reorder',{ids:order});
 }

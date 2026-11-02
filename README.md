@@ -60,4 +60,4 @@ npmのキャッシュが書き込み不可の場合は、`npm_config_cache=/tmp/
 
 `.openai/hosting.json` がSitesのプロジェクトIDとD1バインディングを保持する。Sitesスキルのsource helperでソースのcommit/pushとビルド成果物のパッケージを作り、そのcommitとarchiveを保存・デプロイする。本番マイグレーションはSitesがデプロイ時に適用する。既存のSite IDを維持し、同じアプリを再登録しない。
 
-GitHubのprivateリポジトリとSitesの公開用リポジトリを同じGit履歴で同期する。GitHubのコード変更だけではSitesへ自動公開されない。`.wrangler/`（ローカルDB）、`.sites-runtime/`、`.env*`、認証情報、実際の個人バックアップはコミットしない。
+GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履歴で同期する。アプリの閲覧範囲はSitesで別に管理し、現在は所有者限定。GitHubのコード変更だけではSitesへ自動公開されない。`.wrangler/`（ローカルDB）、`.sites-runtime/`、`.env*`、認証情報、実際の個人バックアップはコミットしない。

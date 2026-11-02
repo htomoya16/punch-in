@@ -1,63 +1,70 @@
 # Punch in
 
-研究・個人開発・就活などの作業時間を、種類ごとのボタンで記録する個人向けWebアプリ。
+**ChatGPT Sitesを使って作成した、個人向けの時間記録アプリです。**
 
-- ひと押しで開始・終了・作業の切り替え
-- ユーザー別の1日の区切り、タイムゾーン、ボタン・テーマの色
-- 日別Markdownメモ（自動保存・編集とプレビュー・下書き復元）
-- 履歴、セルで直接入力する打刻メモ、タイムライン、検索、手動修正
-- 日・週・月・年・全期間の集計表・グラフ・内訳表示と前期間比較
-- JSONバックアップ・復元、履歴と集計のCSV出力
-- 終了忘れ通知（アプリを開いている間）
+ボタンを押して、時間を記録する。自分に合う名前や色、1日の区切りを設定し、記録とメモをまとめて振り返れます。
 
-## 開発
+## 画面
 
-Node.js >=22.13.0。Vinext / React / TypeScript / Cloudflare Workers / D1。認証はSitesが提供するSign in with ChatGPTを使用する。
+### 打刻と日別メモ
 
-```sh
-npm ci
-npm run db:generate # スキーマを変更した場合のみ
-npm run build
-for migration in drizzle/*.sql; do
-  node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file "$migration"
-done
-npm run dev
-```
+時計の下に打刻ボタン、右側にMarkdownメモ。メモは自動保存され、編集とプレビューを切り替えられます。
 
-ローカルURLは起動ログに表示される（通常 http://127.0.0.1:5173/ ）。`/signin-with-chatgpt?return_to=/` から開発用アカウントにログインする。開発用認証はloopbackでのみ有効で、productionには含まれない。ローカルDBと本番DBは別。適用済みのマイグレーションは再実行せず、スキーマ変更は新しいSQLとして生成する。
+![打刻画面。丸いボタン、計測中の経過時間、今日の記録、日別メモのプレビュー](docs/images/punch.webp)
 
-```sh
-npm run typecheck
-npm test
-npm run test:api # ローカル開発サーバー起動中。テスト用の種類・記録を作成する
-npm run test:session-memo-api # セルのメモ保存・打刻との並行操作を検証
-npm run test:notes-api # ビルド済みローカルWorkerで日別メモ・移行・競合を検証
-npm run test:punch-api # ビルド済みWorkerで差分応答・再試行・条件付き取得を検証
-PERF_RECORDS=5000 npm run test:punch-api # 検証用データを作り通信量・待ち時間を比較
-npm run test:isolation # npm start -- --port 8787 で起動したビルド済みWorkerに対して実行
-npm run build
-```
+<details>
+<summary>履歴を見る</summary>
 
-npmのキャッシュが書き込み不可の場合は、`npm_config_cache=/tmp/punch-in-npm-cache npm ci` のように書き込み可能な場所を指定する。
+開始・終了時刻をタイムラインと一覧で確認。メモ欄に直接入力でき、行末から記録の編集・削除ができます。
 
-## ソースの構成
+![履歴画面。種類別のタイムラインと、開始・終了・所要時間・メモを並べた記録一覧](docs/images/history.webp)
 
-| 場所 | 内容 |
-|---|---|
-| `app/punch-app.tsx`, `app/globals.css` | クラウド勤怠Plusを参考にしたレスポンシブUI |
-| `app/api/` | 認証済みAPI |
-| `lib/punch-server.ts`, `lib/punch-state.ts` | 打刻の差分処理・即時仮表示・確定値への反映 |
-| `lib/daily-notes-store.ts`, `lib/daily-note-server.ts`, `app/components/notes/` | 日別メモの保存・復元・独立したエディター |
-| `lib/server.ts` | 所有者スコープ、楽観ロック、atomic batchによる書き込み |
-| `lib/time.ts` | 日付、タイムゾーン、期間、経過時間の純粋関数 |
-| `lib/records.ts`, `lib/validation.ts` | 時間重複、取り込み検証 |
-| `db/schema.ts`, `drizzle/` | DB構造と追記式マイグレーション |
-| `docs/SPEC.md` | 合意した仕様と判断 |
-| `docs/API.md` | APIと移行JSONの仕様 |
-| `docs/HANDOVER.md` | 再実装・運用の引き継ぎ |
+</details>
 
-## 公開
+<details>
+<summary>集計を見る</summary>
 
-`.openai/hosting.json` がSitesのプロジェクトIDとD1バインディングを保持する。Sitesスキルのsource helperでソースのcommit/pushとビルド成果物のパッケージを作り、そのcommitとarchiveを保存・デプロイする。本番マイグレーションはSitesがデプロイ時に適用する。既存のSite IDを維持し、同じアプリを再登録しない。
+日・週・月・年・全期間を切り替え、種類別の内訳をグラフと表で確認できます。棒にカーソルを合わせると内訳が表示され、クリックすると該当する履歴に移動します。
 
-GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履歴で同期する。アプリの閲覧範囲はSitesで別に管理し、現在は所有者限定。GitHubのコード変更だけではSitesへ自動公開されない。`.wrangler/`（ローカルDB）、`.sites-runtime/`、`.env*`、認証情報、実際の個人バックアップはコミットしない。
+![週の集計画面。種類別の積み上げグラフ、日別の時間表、種類別の合計](docs/images/stats.webp)
+
+</details>
+
+画面は実際のアプリをローカルで起動し、表示用のサンプルデータで撮影しています。初期状態のボタンは「打刻」1つです。
+
+## 主な機能
+
+- **ひと押しで記録** — 開始・終了・種類の切り替え。同時計測は1種類。
+- **自分に合う設定** — ボタンの追加・編集・非表示・並び替え、ボタンとテーマの色、1日の開始時刻、タイムゾーン。
+- **記録とメモ** — 履歴検索、手動での追加・修正、記録ごとのメモ、日別Markdownメモの自動保存。
+- **振り返り** — 期間別・種類別の合計、タイムライン、グラフ、秒単位の集計表、前期間との比較。
+- **データを引き継ぐ** — JSONバックアップ・復元、履歴と集計のCSV出力。再実装時の移行仕様も公開。
+- **画面幅に対応** — 狭い画面ではサイドバーを格納し、丸い打刻ボタンを維持。メモは下に並びます。
+
+日の区切りをまたいだ記録は、開始した記録日にまとめて計上します。終了忘れ通知は、アプリを開いている間に利用できます。
+
+## 技術構成
+
+| 領域 | 使用技術 |
+| --- | --- |
+| 作成・ホスティング | ChatGPT Sites |
+| フロントエンド | React / TypeScript / Vinext |
+| 実行環境・データベース | Cloudflare Workers / D1 |
+| 認証 | Sign in with ChatGPT |
+| Markdown | react-markdown / remark-gfm |
+
+現在の[Sites版](https://punch-in-personal.linenhatch1.chatgpt.site)は所有者限定です。GitHubのソース公開とアプリの閲覧範囲は別に管理しています。
+
+## 開発・引き継ぎ
+
+Node.js 22.13.0以上を使用します。ローカルDBの準備、起動、検証、Sitesへの反映は[開発ガイド](docs/DEVELOPMENT.md)を参照してください。
+
+| ドキュメント | 内容 |
+| --- | --- |
+| [開発ガイド](docs/DEVELOPMENT.md) | 環境構築・起動・テスト・ソース構成・公開手順 |
+| [仕様](docs/SPEC.md) | 打刻、記録日、メモ、集計、画面の振る舞い |
+| [APIとデータ移行](docs/API.md) | API、JSON形式、データの引き継ぎ |
+| [再実装・運用の引き継ぎ](docs/HANDOVER.md) | 設計判断と別の構成へ移行するときの注意点 |
+| [パフォーマンス](docs/PERFORMANCE.md) | 打刻処理の設計と測定結果 |
+| [検証記録](docs/VALIDATION.md) | 実施したテストと確認範囲 |
+| [公開前の確認](docs/SECURITY-REVIEW.md) | 秘密情報の確認範囲と結果 |

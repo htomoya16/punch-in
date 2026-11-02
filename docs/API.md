@@ -13,7 +13,7 @@ Content-Type: application/json。ブラウザからのクロスサイトリク�
 ```json
 {
   "action": "punch",
-  "payload": { "categoryId": "research" },
+  "payload": { "categoryId": "punch" },
   "expectedRevision": 0,
   "mutationId": "3ff98a29-2387-469c-aeca-0e398db69500"
 }
@@ -65,22 +65,22 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
     "reminderMinutes": 360
   },
   "categories": [{
-    "id": "research", "name": "研究", "color": "#168ab5",
+    "id": "punch", "name": "打刻", "color": "#168ab5",
     "hidden": false, "archived": false, "position": 0
   }],
   "sessions": [{
     "id": "b8cf22cc-1294-4020-9d36-d2a60497258b",
-    "categoryId": "research",
+    "categoryId": "punch",
     "startedAt": 1793556000000,
     "endedAt": 1793566800000,
     "businessDay": "2026-11-01",
     "dayStart": 300,
     "timezone": "Asia/Tokyo",
-    "memo": "論文を読む",
+    "memo": "作業のメモ",
     "createdAt": 1793556000000,
     "updatedAt": 1793566800000
   }],
-  "dailyNotes": [{ "day": "2026-11-01", "markdown": "# 今日\n\n- 読書", "updatedAt": 1793566800000 }]
+  "dailyNotes": [{ "day": "2026-11-01", "markdown": "# 今日\n\n- 振り返り", "updatedAt": 1793566800000 }]
 }
 ```
 

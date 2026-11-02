@@ -74,6 +74,8 @@
 .punch-add{position:static;flex-basis:auto;width:36px;height:32px;margin:0;align-self:center}
 .notes-open .page-content{padding-left:30px;padding-right:30px}
 .notes-heading time,.notes-heading-actions{flex-shrink:0}
+.current-state.is-running{flex-wrap:wrap;row-gap:10px}
+.running-elapsed{flex-basis:100%;margin-left:0;font-size:44px;font-weight:500;line-height:1.2;white-space:nowrap}
 @container workspace (max-width:520px){
   .punch-stage{min-height:0;padding:25px 0 28px}
   .clock-area{width:100%;min-width:0}
@@ -82,6 +84,7 @@
   .big-clock small{font-size:clamp(18px,5cqi,24px)}
   .full-date{font-size:13px}
   .current-state{flex-wrap:wrap;gap:8px;min-height:24px}
+  .running-elapsed{font-size:clamp(32px,9cqi,40px)}
   .running-memo{max-width:100%}
   .punch-controls{margin-top:23px;gap:10px;padding-bottom:0}
   .punch-buttons,.punch-buttons.single-button,.notes-open .punch-buttons{grid-template-columns:repeat(4,minmax(0,1fr));max-width:calc(2 * var(--punch-diameter) + 20px);gap:20px}

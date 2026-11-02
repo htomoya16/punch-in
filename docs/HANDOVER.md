@@ -44,3 +44,13 @@
 - `npm run test:notes-api` は起動済みのローカルWorker専用。本人・他人の分離、CAS、再試行、304、打刻との独立、v1/v2移行を検証する。本番では実行しない。
 
 参考: [react-markdown](https://github.com/remarkjs/react-markdown)、[remark-gfm](https://github.com/remarkjs/remark-gfm)、[D1 API](https://developers.cloudflare.com/d1/worker-api/d1-database/)。
+
+## セルでのメモ編集と集計
+
+- `lib/session-memo-server.ts` は本文一致のCASでsessions.memoだけを更新し、同じD1バッチでpreferences.memo_revisionを増やす。打刻のrevisionとは独立し、時刻・updatedAtを変更しない。追加SQLは0003。
+- `lib/session-memos-store.ts` が記録別キュー、下書き、衝突と再試行を扱う。セルを離れても保存は継続する。打刻差分では既知のメモを保ち、state取得ではmemoRevisionも照合する。保存応答だけで全体のmemoRevisionを進めると別の記録の更新を見逃すため、全体取得の版は進めない。
+- `lib/stats.ts` で集計バケット・開始日の所属・計測中の加算を一元化する。表、棒、ホバー内訳を同じ結果から描画し、日付の範囲は履歴への遷移にも使う。時刻は各記録が保持するタイムゾーンで表示する。
+- ホバー内訳のデータ取得は不要。長い履歴は内訳30件ずつ、集計表は20期間ずつ描画する。通常の入力はセルだけの状態を更新し、時計や集計全体を毎キーで更新しない。
+- `npm run test:session-memo-api` は起動済みローカルWorker用。所有者、CSRF、CAS、再試行、打刻との並行保存、時刻維持、バックアップを検証する。本番で実行しない。
+
+参考: [React外部ストア](https://react.dev/reference/react/useSyncExternalStore)、[ホバー・フォーカス表示](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)、[D1バッチ](https://developers.cloudflare.com/d1/worker-api/d1-database/)。

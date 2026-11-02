@@ -4,7 +4,7 @@
 
 ## GET /api/state
 
-`{ preferences, categories, sessions, revision, serverNow }` を返す。`?revision=N` を付け、本人のrevisionが一致する場合は304（本文なし、X-Server-Nowで時刻を返す）になる。preferencesは個人設定、categoriesはアーカイブ済みを含む種類、sessionsは全記録。serverNowはサーバーのUnixミリ秒。
+`{ preferences, categories, sessions, revision, memoRevision, serverNow }` を返す。`?revision=N&memoRevision=M` を付け、本人のrevisionとmemoRevisionが一致する場合は304（本文なし、X-Server-Nowで時刻を返す）になる。preferencesは個人設定、categoriesはアーカイブ済みを含む種類、sessionsは全記録。serverNowはサーバーのUnixミリ秒。
 
 ## POST /api/action
 
@@ -102,3 +102,11 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 ## 日別メモの移行
 
 v2ではdailyNotesに日付・生のMarkdown・更新日時を含める。ユーザーID、保存用mutationId、ローカル下書き、CASのversionは含めない。v1も受け付け、日別メモは変更しない。v2は日付重複を拒否し、取り込み先に同じ日付がある場合は既存を優先してスキップする。取り込み中の自動保存とも競合時に上書きしない。上限20000日、全ファイル16MB。
+
+## PUT /api/session-memo
+
+`{id,memo,expectedMemo}` を本人の打刻に送る。本文と期待値は各2000文字以内、リクエストは32KB以内。成功は `{id,memo,memoRevision}`。保存するのはmemoだけで、開始・終了・所属日・updatedAtを変えない。期待した本文が一致した場合だけ更新する。すでに同じ本文なら再試行として成功し、更新を繰り返さない。409は `{error,currentMemo}`、対象が本人の記録に無ければ404を返す。
+
+保存は打刻用revisionと別のmemoRevisionを増やす。打刻の楽観ロックを競合させず、stateの定期取得では両方の変更を検出する。直前の保存応答と古いstate・打刻差分が前後しても、確定したメモを巻き戻さない。
+
+時刻編集のsessionアクションには `expectedMemo` を任意で指定できる。編集画面を開いた後にメモが変わっていれば上書きせず409を返す。対応クライアントは指定する。

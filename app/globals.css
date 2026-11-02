@@ -136,3 +136,58 @@
   .clock-area{padding-top:0}
 }
 @media(prefers-reduced-motion:reduce){.notes-dock,.main,.sidebar{transition:none}}
+
+/* Editable memo cells keep their text cursor through saves and clock ticks. */
+.record-table-region{container:records / inline-size}
+.record-table .memo-cell{min-width:170px;max-width:340px;white-space:normal}
+.inline-memo{position:relative;min-width:0}
+.inline-memo textarea{display:block;width:100%;min-width:0;min-height:34px;max-height:160px;resize:none;border:0;border-bottom:1px solid #e4e9ee;border-radius:0;padding:7px 20px 7px 0;background:transparent;box-shadow:none;color:#42566b;font-size:12px;line-height:1.7;overflow-y:auto;transition:border-color 120ms ease,background-color 120ms ease}
+.inline-memo textarea:hover{border-bottom-color:#c2cdd7}
+.inline-memo textarea:focus{border-bottom-color:var(--accent-link);background:#fafcfd;box-shadow:none}
+.inline-memo textarea::placeholder{color:#a9b2bc}
+.memo-saving{position:absolute;right:1px;top:11px;color:#8394a3}
+.inline-memo.has-error textarea{border-bottom-color:#c65e4c}
+.inline-memo-message{font-size:10px;color:#a64c3d;line-height:1.7;overflow-wrap:anywhere;padding-top:6px}
+.inline-memo-message>div{display:flex;gap:12px;flex-wrap:wrap}.inline-memo-message .text-button{font-size:10px;white-space:normal;text-align:left}.inline-memo-message p{white-space:pre-wrap}
+.record-category-label{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.stats-table-section{margin:0 0 38px;min-width:0}
+.stats-detail-table{width:100%;border-collapse:collapse;font-size:12px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.stats-detail-table th,.stats-detail-table td{padding:12px 15px;border-bottom:1px solid #e9edf1}
+.stats-detail-table thead th{background:#f6f8fa;color:#7e8c9a;font-size:11px;font-weight:400}
+.stats-detail-table th:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;font-weight:400}
+.stats-detail-table thead th:first-child{background:#f6f8fa}
+.stats-detail-table tfoot th,.stats-detail-table tfoot td{font-weight:600;background:#f8fafb;border-top:1px solid #dce4eb}
+.stats-detail-table .stats-row-total{font-weight:500}
+.stats-column-label{display:inline-flex;align-items:center;gap:7px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.chart-hit{display:flex;align-items:stretch;justify-content:center;flex:1;min-height:44px;width:100%;padding:0;border-radius:0}
+.chart-hit .chart-stack{height:100%}
+.chart-hit:hover,.chart-hit.is-selected{background:#eef3f866}
+.chart-hit:focus-visible{outline-offset:-2px}
+.stats-popover{position:fixed;z-index:60;display:flex;flex-direction:column;width:min(420px,calc(100vw - 24px));max-height:min(560px,calc(100svh - 24px));background:#fff;border:1px solid #e2e7ec;box-shadow:0 8px 30px #20344c18;color:#273b50;animation:stats-detail-in 120ms ease-out both;font-size:12px}
+.stats-popover>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:17px 20px;border-bottom:1px solid #edf0f3;flex-shrink:0}
+.stats-popover header time{display:block;color:#81909f;font-size:11px;margin-bottom:4px}.stats-popover header strong{font-size:25px;line-height:1.3;font-weight:500;font-variant-numeric:tabular-nums}
+.stats-popover-body{overflow:auto;overscroll-behavior:contain;padding:0 20px;min-height:0}
+.popover-totals{padding:12px 0;border-bottom:1px solid #edf0f3}.popover-totals>div{display:flex;justify-content:space-between;gap:16px;padding:4px 0}.popover-totals>div>span{min-width:0;overflow-wrap:anywhere}.popover-totals .dot{margin-right:8px}.popover-totals strong{font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
+.popover-records article{padding:14px 0;border-bottom:1px solid #edf0f3}.popover-records article>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px}.popover-category{min-width:0;overflow-wrap:anywhere}.popover-records strong{font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}.popover-records time{display:block;font-size:10px;color:#8a97a4;padding-top:4px;font-variant-numeric:tabular-nums;white-space:normal}.popover-records p{margin:8px 0 0;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}.popover-empty{padding:14px 0;color:#8c98a5}
+.stats-popover footer{padding:10px 20px;border-top:1px solid #edf0f3;display:flex;justify-content:flex-end;flex-shrink:0}
+@keyframes stats-detail-in{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+@container records (max-width:600px){
+  .record-table,.record-table:not(.compact){display:block;min-width:0;width:100%;white-space:normal}
+  .record-table thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .record-table tbody{display:block;width:100%}
+  .record-table tr{display:grid;grid-template-columns:minmax(60px,1fr) minmax(60px,1fr) auto 28px;gap:10px 8px;padding:15px 0;border-bottom:1px solid #e7edf2}
+  .record-table td,.record-table td:first-child,.record-table td:last-child{padding:0;border:0;min-width:0;background:transparent!important;align-self:center}
+  .record-table .date-cell{grid-column:1;grid-row:1;font-size:10px;color:#81909e}
+  .record-table td.record-category{grid-column:2/4;grid-row:1}
+  .record-table.compact td.record-category{grid-column:1/4}
+  .record-table .category-name{max-width:100%;gap:7px}
+  .record-table td.record-start{grid-column:1;grid-row:2}
+  .record-table td.record-start:after{content:" →";color:#a2adb7;margin-left:6px}
+  .record-table td.record-end{grid-column:2;grid-row:2}
+  .record-table td.duration-cell{grid-column:3/5;grid-row:2;text-align:right;white-space:nowrap;font-size:12px}
+  .record-table td.record-edit,.record-table.compact td.record-edit{grid-column:4;grid-row:1;width:auto;padding:0;justify-self:end}
+  .record-table td.memo-cell,.record-table.compact td.memo-cell{display:block;grid-column:1/-1;grid-row:3;width:100%;max-width:none;min-width:0;padding:0}
+  .inline-memo textarea{font-size:16px;min-height:38px;line-height:1.65;padding-top:5px;padding-bottom:5px}
+}
+@media(max-width:760px){.stats-detail-table{font-size:11px}.stats-detail-table th,.stats-detail-table td{padding:10px 12px}.stats-table-section .section-total{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.stats-popover{animation:none}.inline-memo textarea{transition:none}}

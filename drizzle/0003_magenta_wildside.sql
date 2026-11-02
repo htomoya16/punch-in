@@ -1,0 +1,1 @@
+ALTER TABLE `preferences` ADD `memo_revision` integer DEFAULT 0 NOT NULL;

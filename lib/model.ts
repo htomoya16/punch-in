@@ -4,7 +4,7 @@ export type Session = {
   id: string; categoryId: string; startedAt: number; endedAt: number | null; businessDay: string;
   dayStart: number; timezone: string; memo: string; createdAt: number; updatedAt: number;
 };
-export type AppState = { preferences: Preferences; categories: Category[]; sessions: Session[]; revision: number; serverNow: number };
+export type AppState = { preferences: Preferences; categories: Category[]; sessions: Session[]; revision: number; memoRevision?: number; serverNow: number };
 export type PunchDelta = { baseRevision: number; revision: number; sessions: Session[]; serverNow: number };
 export type PendingPunch = { categoryId: string; mutationId: string; baseRevision: number; at: number };
 type BackupBase = { format: "punch-in"; exportedAt: string; preferences: Preferences; categories: Category[]; sessions: Session[] };

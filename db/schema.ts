@@ -9,6 +9,7 @@ export const preferences = sqliteTable("preferences", {
   sidebar: text("sidebar").notNull().default("#272c34"),
   reminderEnabled: integer("reminder_enabled").notNull().default(0),
   reminderMinutes: integer("reminder_minutes").notNull().default(360),
+  memoRevision: integer("memo_revision").notNull().default(0),
   revision: integer("revision").notNull().default(0),
   mutationToken: text("mutation_token").notNull().default(""),
   seeded: integer("seeded").notNull().default(0),

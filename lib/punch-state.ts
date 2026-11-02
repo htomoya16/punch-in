@@ -22,7 +22,7 @@ export function applyPunchDelta(state: AppState, delta: PunchDelta): AppState | 
   const replacements = new Map(delta.sessions.map(s => [s.id, s]));
   const existing = new Set(state.sessions.map(s => s.id));
   return { ...state, revision: delta.revision, serverNow: delta.serverNow,
-    sessions: [...delta.sessions.filter(s => !existing.has(s.id)), ...state.sessions.map(s => replacements.get(s.id) ?? s)],
+    sessions: [...delta.sessions.filter(s => !existing.has(s.id)), ...state.sessions.map(s => {const changed=replacements.get(s.id);return changed?{...changed,memo:s.memo}:s;})],
   };
 }
 

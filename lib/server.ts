@@ -29,7 +29,7 @@ export async function readState(user: string): Promise<AppState> {
     preferences: { timezone:String(p.timezone),dayStart:Number(p.day_start),accent:String(p.accent),sidebar:String(p.sidebar),reminderEnabled:!!p.reminder_enabled,reminderMinutes:Number(p.reminder_minutes) },
     categories: cr.results.map(c => ({ ...c, hidden:!!c.hidden,archived:!!c.archived })) as Category[],
     sessions: sr.results.map(sessionFromRow),
-    revision:Number(p.revision), serverNow:Date.now(),
+    memoRevision:Number(p.memo_revision), revision:Number(p.revision), serverNow:Date.now(),
   };
 }
 const envelopeSchema = z.object({ action:z.enum(["punch","category","archiveCategory","reorder","preferences","session","deleteSession","importPreview","import"]), payload:z.unknown(), responseMode:z.enum(["state","delta"]).default("state"), pressedAt:z.number().int().nonnegative().optional(), expectedRevision:z.number().int().min(0), mutationId:z.string().uuid() });
@@ -69,8 +69,12 @@ export async function action(request: Request, user: string, receivedAt = Date.n
     write(`UPDATE categories SET position=(SELECT key FROM json_each(?) WHERE value=categories.id) WHERE user_id=? AND archived=0 AND ${guard}`,[JSON.stringify(ids),user]);
   } else if(input.action==="preferences") { savePrefs(preferenceSchema.parse(input.payload));
   } else if(input.action==="session") {
-    const p=z.object({id:z.string(),categoryId:z.string(),startedAt:z.number().int(),endedAt:z.number().int().nullable(),memo:z.string().max(2000)}).parse(input.payload);
+    const p=z.object({id:z.string(),categoryId:z.string(),startedAt:z.number().int(),endedAt:z.number().int().nullable(),memo:z.string().max(2000),expectedMemo:z.string().max(2000).optional()}).parse(input.payload);
     requireCategory(state,p.categoryId,true); const old=state.sessions.find(s=>s.id===p.id);
+    if(old){
+      if(p.expectedMemo!==undefined&&old.memo!==p.expectedMemo&&old.memo!==p.memo)throw new HttpError(409,"メモが別の画面で更新されました。編集を開き直してください");
+      statements[0]=d.prepare("UPDATE preferences SET revision=revision+1,mutation_token=? WHERE user_id=? AND revision=? AND EXISTS (SELECT 1 FROM sessions WHERE user_id=? AND id=? AND memo=?)").bind(token,user,input.expectedRevision,user,old.id,old.memo);
+    }
     const dayStart=old?.dayStart??state.preferences.dayStart, timezone=old?.timezone??state.preferences.timezone;
     const s=sessionSchema.parse({...p,dayStart,timezone,businessDay:businessDay(p.startedAt,dayStart,timezone),createdAt:old?.createdAt??now,updatedAt:now});
     if(s.startedAt>now+1000 || (s.endedAt!==null&&s.endedAt>now+1000)) throw new HttpError(400,"未来の打刻は登録できません");
@@ -93,9 +97,9 @@ export async function action(request: Request, user: string, receivedAt = Date.n
   return {state:await readState(user)};
 }
 export function makeBackup(state: AppState, dailyNotes: DailyNoteExport[]=[]): Backup { return {format:"punch-in",version:2,exportedAt:new Date().toISOString(),preferences:state.preferences,categories:state.categories,sessions:state.sessions,dailyNotes}; }
-export async function stateResponse(user:string, revision?:number) {
-  const current=await db().prepare("SELECT revision,seeded FROM preferences WHERE user_id=?").bind(user).first<{revision:number;seeded:number}>();
+export async function stateResponse(user:string, revision?:number,memoRevision=0) {
+  const current=await db().prepare("SELECT revision,seeded,memo_revision FROM preferences WHERE user_id=?").bind(user).first<{revision:number;seeded:number;memo_revision:number}>();
   if(!current || current.seeded<2) await initialize(user);
-  else if(revision===current.revision) return new Response(null,{status:304,headers:{"Cache-Control":"no-store","X-Server-Now":String(Date.now())}});
+  else if(revision===current.revision&&memoRevision===current.memo_revision) return new Response(null,{status:304,headers:{"Cache-Control":"no-store","X-Server-Now":String(Date.now())}});
   return json(await readState(user));
 }

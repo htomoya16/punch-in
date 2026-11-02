@@ -17,7 +17,8 @@
     "test:api": "node tests/api-test.mjs",
     "test:isolation": "node tests/isolation-test.mjs",
     "test:punch-api": "node tests/punch-api-test.mjs",
-    "test:notes-api": "node tests/daily-note-api-test.mjs"
+    "test:notes-api": "node tests/daily-note-api-test.mjs",
+    "test:session-memo-api": "node tests/session-memo-api-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

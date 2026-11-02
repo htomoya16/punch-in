@@ -32,3 +32,35 @@
 
 .brand-mark{background:#000;overflow:hidden}
 .brand-mark img{display:block;width:100%;height:100%;object-fit:contain}
+
+/* Daily notes share the page canvas; the editor has no card chrome. */
+.app{--notes-width:clamp(380px,42vw,620px)}
+.main{transition:margin-right 200ms ease-out}
+.notes-open .main{margin-right:var(--notes-width)}
+.page-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.notes-toggle{font-size:12px;position:relative}
+.note-error-dot{width:6px;height:6px;background:#d45b49;border-radius:50%}
+.punch-stage{display:flex;flex-direction:column;align-items:center;gap:0;min-height:390px;padding:30px 0 45px}
+.clock-area{padding-top:0;text-align:center;align-self:center}
+.big-clock,.current-state{justify-content:center}
+.running-memo{margin:0 auto}
+.punch-buttons{margin-top:28px;width:max-content;max-width:100%;grid-template-columns:repeat(3,var(--punch-diameter));justify-content:center;padding-bottom:26px}
+.punch-add{right:calc(50% - 12px);bottom:-15px}
+.notes-dock{position:fixed;z-index:22;right:0;top:var(--header-height);bottom:0;width:var(--notes-width);display:flex;flex-direction:column;background:#fff;transform:translateX(100%);visibility:hidden;transition:transform 200ms ease-out,visibility 200ms;outline:none}
+.notes-dock.is-open{transform:translateX(0);visibility:visible}
+.notes-heading{height:68px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 26px}
+.notes-heading time{font-size:13px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.notes-heading-actions{display:flex;align-items:center;gap:14px}
+.note-mode-toggle{color:var(--accent-link)}
+.note-save-status{display:flex;color:#6e8b7e}
+.note-save-status:has(svg.lucide-circle-alert){color:#c35949}
+.notes-body{flex:1;min-height:0;display:flex;overflow:hidden}
+.note-editor{display:block;resize:none;flex:1;width:100%;min-width:0;height:100%;padding:15px 30px 40px;border:0!important;border-radius:0!important;box-shadow:none!important;background:#fff;outline:0;font:13px/1.9 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;color:#253449;tab-size:2}
+.note-editor::placeholder{color:#b4bac1}
+.note-markdown{width:100%;overflow:auto;padding:12px 30px 48px;font-size:14px;line-height:1.85;overflow-wrap:anywhere;color:#253449}
+.note-markdown>:first-child{margin-top:0}.note-markdown h1,.note-markdown h2,.note-markdown h3{line-height:1.5;margin:1.4em 0 .6em;font-weight:600}.note-markdown h1{font-size:25px}.note-markdown h2{font-size:21px}.note-markdown h3{font-size:17px}.note-markdown p,.note-markdown ul,.note-markdown ol{margin:.7em 0}.note-markdown ul,.note-markdown ol{padding-left:1.6em}.note-markdown ul{list-style:disc}.note-markdown ol{list-style:decimal}.note-markdown li{margin:.2em 0}.note-markdown li>p{margin:.25em 0}.note-markdown a{color:var(--accent-link);text-decoration:underline;text-underline-offset:3px}.note-markdown blockquote{margin:1em 0;padding-left:16px;border-left:2px solid #d8dfe5;color:#6e7a87}.note-markdown pre{overflow:auto;padding:14px 16px;background:#f5f7f9;font-size:12px;line-height:1.7}.note-markdown code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.note-markdown :not(pre)>code{background:#f1f4f6;padding:2px 4px;font-size:.9em}.note-markdown table{display:block;max-width:100%;overflow:auto;border-collapse:collapse;font-size:12px}.note-markdown th,.note-markdown td{border:1px solid #dfe4e9;padding:6px 12px;white-space:nowrap}.note-markdown th{font-weight:600;background:#f7f9fa}.note-markdown hr{border:0;border-top:1px solid #e3e8ec;margin:24px 0}.note-markdown img{max-width:100%;height:auto}.note-markdown .task-list-item{list-style:none}.note-markdown .task-list-item input{margin-left:-1.4em;margin-right:7px;accent-color:var(--accent)}
+.note-message{margin:0 26px 8px;padding:10px 0;display:flex;gap:12px;justify-content:space-between;font-size:11px;color:#aa4f41}.note-message .text-button{font-size:11px;white-space:nowrap}.note-conflict{display:block}.note-conflict>div{display:flex;gap:20px;padding:8px 0}.note-conflict details{color:#5b6979}.note-conflict pre{max-height:140px;overflow:auto;white-space:pre-wrap;margin-top:8px}.note-loading{padding:30px;color:#9aa4af}.note-day-button{font:inherit;color:inherit;padding:4px 0;text-decoration:underline;text-decoration-color:#cbd5df;text-underline-offset:4px}.note-day-button:hover{color:var(--accent-link)}
+@media(min-width:761px){.notes-open .punch-buttons{grid-template-columns:repeat(2,var(--punch-diameter))}.notes-open .punch-buttons.single-button{grid-template-columns:var(--punch-diameter)}.notes-open .punch-stage{min-height:390px}.notes-open .page-content{padding-left:30px;padding-right:30px}}
+@media(max-width:1000px){.notes-open .main{margin-right:0}.notes-dock{width:min(620px,calc(100vw - 190px));z-index:26}}
+@media(max-width:760px){.notes-dock{width:100%;z-index:26}.notes-heading{height:57px;padding:0 20px}.notes-heading-actions{gap:12px}.note-editor{padding:16px 23px 35px;font-size:16px;line-height:1.8}.note-markdown{padding:16px 23px 35px}.note-message{margin-left:23px;margin-right:23px}.punch-stage{padding:32px 0 27px;min-height:0}.punch-buttons{width:100%;max-width:none;padding-bottom:0;margin-top:30px}.punch-add{bottom:auto;right:auto}.notes-toggle{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.notes-dock,.main{transition:none}}

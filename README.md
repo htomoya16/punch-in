@@ -4,6 +4,7 @@
 
 - ひと押しで開始・終了・作業の切り替え
 - ユーザー別の1日の区切り、タイムゾーン、ボタン・テーマの色
+- 日別Markdownメモ（自動保存・編集とプレビュー・下書き復元）
 - 履歴、任意メモ、タイムライン、検索、手動修正
 - 日・週・月・年・全期間の種類別集計と前期間比較
 - JSONバックアップ・復元、履歴と集計のCSV出力
@@ -17,7 +18,9 @@ Node.js >=22.13.0。Vinext / React / TypeScript / Cloudflare Workers / D1。認�
 npm ci
 npm run db:generate # スキーマを変更した場合のみ
 npm run build
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_curly_wildside.sql
+for migration in drizzle/*.sql; do
+  node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file "$migration"
+done
 npm run dev
 ```
 
@@ -27,6 +30,7 @@ npm run dev
 npm run typecheck
 npm test
 npm run test:api # ローカル開発サーバー起動中。テスト用の種類・記録を作成する
+npm run test:notes-api # ビルド済みローカルWorkerで日別メモ・移行・競合を検証
 npm run test:punch-api # ビルド済みWorkerで差分応答・再試行・条件付き取得を検証
 PERF_RECORDS=5000 npm run test:punch-api # 検証用データを作り通信量・待ち時間を比較
 npm run test:isolation # npm start -- --port 8787 で起動したビルド済みWorkerに対して実行
@@ -42,6 +46,7 @@ npmのキャッシュが書き込み不可の場合は、`npm_config_cache=/tmp/
 | `app/punch-app.tsx`, `app/globals.css` | クラウド勤怠Plusを参考にしたレスポンシブUI |
 | `app/api/` | 認証済みAPI |
 | `lib/punch-server.ts`, `lib/punch-state.ts` | 打刻の差分処理・即時仮表示・確定値への反映 |
+| `lib/daily-notes-store.ts`, `lib/daily-note-server.ts`, `app/components/notes/` | 日別メモの保存・復元・独立したエディター |
 | `lib/server.ts` | 所有者スコープ、楽観ロック、atomic batchによる書き込み |
 | `lib/time.ts` | 日付、タイムゾーン、期間、経過時間の純粋関数 |
 | `lib/records.ts`, `lib/validation.ts` | 時間重複、取り込み検証 |

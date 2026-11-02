@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await requireChatGPTUser("/");
   await initialize(user.userId);
-  return <PunchApp initial={await readState(user.userId)} displayName={user.displayName} />;
+  return <PunchApp initial={await readState(user.userId)} displayName={user.displayName} draftScope={user.userId} />;
 }

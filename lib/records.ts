@@ -12,11 +12,13 @@ export function assertNoOverlap(all: Session[]) {
     end = s.endedAt ?? Infinity;
   }
 }
-export function planImport(state: AppState, raw: unknown) {
+export function planImport(state: AppState, raw: unknown, existingNoteDays: ReadonlySet<string> = new Set()) {
   const backup = backupSchema.parse(raw);
   const categories = backup.categories.filter(c=>!state.categories.some(x=>x.id===c.id));
   const sessions = backup.sessions.filter(s=>!state.sessions.some(x=>x.id===s.id));
   if(sessions.some(s=>s.startedAt > Date.now()+1000 || (s.endedAt!==null && s.endedAt>Date.now()+1000))) throw new HttpError(400,"未来の打刻は取り込めません");
   assertNoOverlap([...state.sessions,...sessions]);
-  return { backup, categories, sessions, preview:{categories:categories.length,sessions:sessions.length,skippedCategories:backup.categories.length-categories.length,skippedSessions:backup.sessions.length-sessions.length,running:sessions.some(s=>s.endedAt===null)} };
+  const notes = backup.version===2 ? backup.dailyNotes : [];
+  const dailyNotes = notes.filter(n=>!existingNoteDays.has(n.day));
+  return { backup, categories, sessions, dailyNotes, preview:{dailyNotes:dailyNotes.length,skippedDailyNotes:notes.length-dailyNotes.length,categories:categories.length,sessions:sessions.length,skippedCategories:backup.categories.length-categories.length,skippedSessions:backup.sessions.length-sessions.length,running:sessions.some(s=>s.endedAt===null)} };
 }

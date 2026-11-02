@@ -28,3 +28,12 @@ export const sessions = sqliteTable("sessions", {
   uniqueIndex("one_running_session").on(t.userId).where(sql`${t.endedAt} IS NULL`),
   check("positive_duration", sql`${t.endedAt} IS NULL OR ${t.endedAt} >= ${t.startedAt}`),
 ]);
+
+export const dailyNotes = sqliteTable("daily_notes", {
+  userId: text("user_id").notNull(),
+  day: text("day").notNull(),
+  markdown: text("markdown").notNull().default(""),
+  version: integer("version").notNull().default(1),
+  mutationId: text("mutation_id").notNull().default(""),
+  updatedAt: integer("updated_at").notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.day] }), check("positive_note_version", sql`${t.version} >= 1`)]);

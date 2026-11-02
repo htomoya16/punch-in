@@ -1,4 +1,4 @@
-# API / JSON移行形式 v1
+# API / JSON移行形式 v2
 
 認証はSitesのSign in with ChatGPTを使用する。全エンドポイントは認証必須。サーバーは信頼済みのリクエストヘッダーからユーザーIDを解決し、クライアントが送る所有者IDは使用しない。レスポンスはno-store。
 
@@ -29,7 +29,7 @@ sessionsは実際に開始・終了した最大2件。クライアントはbaseR
 
 打刻のルートフィールド `pressedAt` は任意のUnixミリ秒。クライアントはサーバーとの時刻差を補正して送信する。サーバーは受信前60秒〜受信後2秒の整数のみ受け入れ、未来は受信時刻へ切り詰める。範囲外・省略は受信時刻を使う。直近の開始・終了より前にならないよう調整する。APIレスポンスのServer-Timingはサーバー内の処理時間を示す。
 
-importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCategories": 0, "skippedSessions": 0, "running": false} }`。
+importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCategories": 0, "skippedSessions": 0, "dailyNotes": 0, "skippedDailyNotes": 0, "running": false} }`。
 
 | action | payload |
 |---|---|
@@ -54,7 +54,7 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 ```json
 {
   "format": "punch-in",
-  "version": 1,
+  "version": 2,
   "exportedAt": "2026-11-01T15:00:00.000Z",
   "preferences": {
     "timezone": "Asia/Tokyo",
@@ -79,7 +79,8 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
     "memo": "論文を読む",
     "createdAt": 1793556000000,
     "updatedAt": 1793566800000
-  }]
+  }],
+  "dailyNotes": [{ "day": "2026-11-01", "markdown": "# 今日\n\n- 読書", "updatedAt": 1793566800000 }]
 }
 ```
 
@@ -89,3 +90,15 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 - エクスポートに認証情報は含まれない。移行先でログインし、その本人のデータとして取り込む。
 - 同じIDの取り込みは上書きしない。新しいIDの記録と既存記録が重なる場合は全体を拒否する。
 - CSVは分析用。完全な復元にはJSONを利用する。CSVの先頭が式として解釈される文字列には引用符を付加する。
+
+## GET /api/daily-note?day=YYYY-MM-DD
+
+認証済み本人の `{note:{day,markdown,version,updatedAt}}` を返す。未作成は空本文・version 0。`&version=N` が一致すれば304。日別メモの版は打刻のrevisionと独立し、stateには本文を含めない。
+
+## PUT /api/daily-note
+
+`{day,markdown,expectedVersion,mutationId}` をJSONで送る。本文は最大100000文字、リクエストは1MiB以内。実在する日付とUUIDを検証し、同一Originのみ受け付ける。成功は `{note}`。本人・日付・版が一致した場合にだけ保存し、版を1増やす。同じmutationId・本文の直後の再試行は同じ結果を返す。409は `{error,current:note}` を返し、クライアントは下書きを保持して利用者に選択させる。本文を空にしても行と版は残し、古い画面からの復活を防ぐ。
+
+## 日別メモの移行
+
+v2ではdailyNotesに日付・生のMarkdown・更新日時を含める。ユーザーID、保存用mutationId、ローカル下書き、CASのversionは含めない。v1も受け付け、日別メモは変更しない。v2は日付重複を拒否し、取り込み先に同じ日付がある場合は既存を優先してスキップする。取り込み中の自動保存とも競合時に上書きしない。上限20000日、全ファイル16MB。

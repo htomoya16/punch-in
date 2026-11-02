@@ -1,6 +1,9 @@
-import { env } from "cloudflare:workers";
+import { getDatabase as db } from "./database";
+import { api, json, userId, readJson } from "./api";
+export { api, json, userId };
+import { readDailyNoteDays } from "./daily-note-server";
+import type { DailyNoteExport } from "./daily-note";
 import { z } from "zod";
-import { getChatGPTUser } from "../app/chatgpt-auth";
 import { type AppState, type Backup, type Category, type Preferences, type Session } from "./model";
 import { bootstrapQueries } from "./bootstrap";
 import { performPunch, sessionFromRow } from "./punch-server";
@@ -9,8 +12,6 @@ import { businessDay } from "./time";
 
 import { HttpError } from "./errors";
 import { planImport, assertNoOverlap } from "./records";
-function db() { if (!env.DB) throw new Error("Database unavailable"); return env.DB; }
-export async function userId() { const u = await getChatGPTUser(); if (!u) throw new HttpError(401,"ログインしてください"); return u.userId; }
 export async function initialize(user: string) {
   const d = db();
   if (await d.prepare("SELECT 1 FROM preferences WHERE user_id=? AND seeded>=2").bind(user).first()) return;
@@ -34,19 +35,14 @@ export async function readState(user: string): Promise<AppState> {
 const envelopeSchema = z.object({ action:z.enum(["punch","category","archiveCategory","reorder","preferences","session","deleteSession","importPreview","import"]), payload:z.unknown(), responseMode:z.enum(["state","delta"]).default("state"), pressedAt:z.number().int().nonnegative().optional(), expectedRevision:z.number().int().min(0), mutationId:z.string().uuid() });
 function requireCategory(state: AppState, id: string, allowArchived = false) { const c=state.categories.find(c=>c.id===id && (allowArchived || !c.archived)); if(!c) throw new HttpError(400,"作業の種類が見つかりません"); return c; }
 export async function action(request: Request, user: string, receivedAt = Date.now()) {
-  const origin=request.headers.get("origin");
-  if((origin && origin!==new URL(request.url).origin) || request.headers.get("sec-fetch-site")==="cross-site") throw new HttpError(403,"この画面から操作してください");
-  if(!request.headers.get("content-type")?.includes("application/json")) throw new HttpError(415,"JSON形式で送信してください");
-  if(Number(request.headers.get("content-length"))>16_000_000) throw new HttpError(413,"ファイルは16MB以内にしてください");
-  const body=await request.text(); if(body.length>16_000_000) throw new HttpError(413,"ファイルは16MB以内にしてください");
-  let raw: unknown; try { raw=JSON.parse(body); } catch { throw new HttpError(400,"JSONを読み込めません"); }
+  const raw=await readJson(request,16_000_000);
   const input=envelopeSchema.parse(raw); const d=db();
   if(input.action==="punch") {
     const delta=await performPunch(d,user,input,receivedAt);
     return delta && input.responseMode==="delta" ? {punchDelta:delta} : {state:await readState(user)};
   }
   const state=await readState(user);
-  if(input.action==="importPreview") { const p=z.object({backup:z.unknown()}).parse(input.payload); return {preview:planImport(state,p.backup).preview}; }
+  if(input.action==="importPreview") { const p=z.object({backup:z.unknown()}).parse(input.payload); return {preview:planImport(state,p.backup,await readDailyNoteDays(d,user)).preview}; }
   const last=await d.prepare("SELECT mutation_token FROM preferences WHERE user_id=?").bind(user).first<{mutation_token:string}>();
   if(last?.mutation_token===input.mutationId) return {state};
   if(state.revision!==input.expectedRevision) throw new HttpError(409,"別の画面で更新されました。最新の状態を確認して、もう一度操作してください");
@@ -86,18 +82,17 @@ export async function action(request: Request, user: string, receivedAt = Date.n
     if(!state.sessions.some(s=>s.id===id)) throw new HttpError(404,"記録が見つかりません");
     write(`DELETE FROM sessions WHERE user_id=? AND id=? AND ${guard}`,[user,id]);
   } else if(input.action==="import") {
-    const p=z.object({backup:z.unknown(),includePreferences:z.boolean()}).parse(input.payload); const plan=planImport(state,p.backup);
+    const p=z.object({backup:z.unknown(),includePreferences:z.boolean()}).parse(input.payload); const plan=planImport(state,p.backup,await readDailyNoteDays(d,user));
     if(plan.categories.length) write(`INSERT INTO categories (user_id,id,name,color,hidden,archived,position) SELECT ?,json_extract(value,'$.id'),json_extract(value,'$.name'),json_extract(value,'$.color'),json_extract(value,'$.hidden'),json_extract(value,'$.archived'),json_extract(value,'$.position') FROM json_each(?) WHERE ${guard}`,[user,JSON.stringify(plan.categories)]);
     if(plan.sessions.length) write(`INSERT INTO sessions (user_id,id,category_id,started_at,ended_at,business_day,day_start,timezone,memo,created_at,updated_at) SELECT ?,json_extract(value,'$.id'),json_extract(value,'$.categoryId'),json_extract(value,'$.startedAt'),json_extract(value,'$.endedAt'),json_extract(value,'$.businessDay'),json_extract(value,'$.dayStart'),json_extract(value,'$.timezone'),json_extract(value,'$.memo'),json_extract(value,'$.createdAt'),json_extract(value,'$.updatedAt') FROM json_each(?) WHERE ${guard}`,[user,JSON.stringify(plan.sessions)]);
+    if(plan.dailyNotes.length) write(`INSERT INTO daily_notes (user_id,day,markdown,version,mutation_id,updated_at) SELECT ?,json_extract(value,'$.day'),json_extract(value,'$.markdown'),1,?,json_extract(value,'$.updatedAt') FROM json_each(?) WHERE ${guard} ON CONFLICT(user_id,day) DO NOTHING`,[user,token,JSON.stringify(plan.dailyNotes)]);
     if(p.includePreferences) savePrefs(plan.backup.preferences);
   }
   const result=await d.batch(statements);
   if(!result[0].meta.changes) throw new HttpError(409,"別の画面で更新されました。もう一度操作してください");
   return {state:await readState(user)};
 }
-export function makeBackup(state: AppState): Backup { return {format:"punch-in",version:1,exportedAt:new Date().toISOString(),preferences:state.preferences,categories:state.categories,sessions:state.sessions}; }
-export async function api(handler:()=>Promise<Response>) { try { return await handler(); } catch(e) { if(e instanceof HttpError) return Response.json({error:e.message},{status:e.status}); if(e instanceof z.ZodError) return Response.json({error:e.issues.map(x=>x.message).slice(0,3).join(" / ")},{status:400}); console.error("Punch in request failed",e); return Response.json({error:"保存できませんでした。時間をおいて再試行してください"},{status:500}); } }
-export function json(data:unknown, headers:Record<string,string> = {}) { return Response.json(data,{headers:{"Cache-Control":"no-store",...headers}}); }
+export function makeBackup(state: AppState, dailyNotes: DailyNoteExport[]=[]): Backup { return {format:"punch-in",version:2,exportedAt:new Date().toISOString(),preferences:state.preferences,categories:state.categories,sessions:state.sessions,dailyNotes}; }
 export async function stateResponse(user:string, revision?:number) {
   const current=await db().prepare("SELECT revision,seeded FROM preferences WHERE user_id=?").bind(user).first<{revision:number;seeded:number}>();
   if(!current || current.seeded<2) await initialize(user);

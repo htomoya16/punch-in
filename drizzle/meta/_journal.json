@@ -15,6 +15,13 @@
       "when": 1793550024826,
       "tag": "0001_quick_gideon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793613404031,
+      "tag": "0002_famous_rachel_grey",
+      "breakpoints": true
     }
   ]
 }

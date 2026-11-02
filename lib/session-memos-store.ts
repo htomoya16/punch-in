@@ -23,6 +23,8 @@ export class SessionMemosStore {
     const ok=await e.saving;return ok&&e.dirty?this.flush(id):ok;
   }
   resolve(id:string,mine:boolean){const e=this.entry(id),remote=e.snapshot.conflict;if(remote===undefined)return;e.base=remote;e.job=undefined;e.dirty=mine&&e.snapshot.memo!==remote;this.publish(e,{memo:mine?e.snapshot.memo:remote,status:e.dirty?"pending":"saved",conflict:undefined,error:undefined});this.persist(id,e);if(e.dirty)void this.flush(id);else this.saved(id,e.snapshot.memo);}
+  // Call only after a successful flush and record deletion.
+  discard(id:string){const e=this.entries.get(id);if(e){clearTimeout(e.timer);clearTimeout(e.draftTimer);}this.entries.delete(id);this.editing.delete(id);try{this.storage?.removeItem(this.key(id));}catch{/* Deleted records need no browser draft. */}}
   async flushAll(){return(await Promise.all([...this.entries.keys()].map(id=>this.flush(id)))).every(Boolean);}
   hasUnsaved(){return[...this.entries.values()].some(e=>e.dirty||e.job);}
   persistAll(){this.entries.forEach((e,id)=>this.persist(id,e));}

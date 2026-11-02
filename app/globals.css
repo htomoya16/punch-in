@@ -191,3 +191,30 @@
 }
 @media(max-width:760px){.stats-detail-table{font-size:11px}.stats-detail-table th,.stats-detail-table td{padding:10px 12px}.stats-table-section .section-total{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.stats-popover{animation:none}.inline-memo textarea{transition:none}}
+
+/* Outline controls follow the user's accent while retaining readable text. */
+.primary-button,.outline-button,.danger-button{border-radius:7px;min-height:38px;gap:8px;transition:background-color 140ms ease,border-color 140ms ease,color 140ms ease,transform 100ms ease}
+.primary-button{border:1px solid var(--accent-link);background:#fff;color:var(--accent-link)}
+.primary-button:hover{background:color-mix(in srgb,var(--accent) 7%,white);filter:none}
+.outline-button{background:#fff;border-color:#d5dee5;color:#62778b}
+.outline-button:hover{background:#f6f8fa;border-color:#a9b9c7}
+.primary-button:active:not(:disabled),.outline-button:active:not(:disabled),.danger-button:active:not(:disabled){transform:translateY(1px)}
+/* Keep scrolling, hide only memo scrollbars. */
+:where(textarea,.note-markdown,.note-markdown pre,.note-markdown table,.note-conflict pre,.stats-popover-body){scrollbar-width:none}
+:where(textarea,.note-markdown,.note-markdown pre,.note-markdown table,.note-conflict pre,.stats-popover-body)::-webkit-scrollbar{display:none}
+:where(.note-markdown,.note-markdown pre,.note-markdown table,.note-conflict pre,.stats-popover-body):focus-visible{outline:2px solid var(--accent-link);outline-offset:-2px}
+/* Animate the space once when measurement starts or stops; never the tick. */
+.live-details{display:grid;grid-template-rows:0fr;opacity:0;width:100%;transition:grid-template-rows 220ms cubic-bezier(.2,.8,.2,1),opacity 160ms ease}
+.live-details.is-active{grid-template-rows:1fr;opacity:1}
+.live-details-content{min-height:0;overflow:hidden}
+.live-details .running-elapsed{display:block;padding-top:10px}
+.record-actions{display:flex;justify-content:flex-end;gap:4px}
+.record-table td.record-edit{width:78px}
+.record-table .record-actions .icon-button{width:32px;height:32px}
+.record-actions .danger{color:#b77973}
+.record-actions .danger:hover{color:#c24e46;background:#fff1f0}
+@container records (max-width:600px){
+  .record-table td.record-category{grid-column:2/3}
+  .record-table.compact td.record-category{grid-column:1/3}
+  .record-table td.record-edit,.record-table.compact td.record-edit{grid-column:3/5;width:auto;padding:0}
+}

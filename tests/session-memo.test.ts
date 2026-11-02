@@ -24,3 +24,10 @@ test("集計表とグラフは秒・24時間超・開始日・メモを同じデ
 test("月のドリルダウンはうるう年を含む月初〜月末、計測中を二重加算しない",()=>{const sessions=[record("live","2024-02-29",1000,null)];const bucket=buildStatsBuckets(sessions,"year","2024-01-01","2024-12-31")[1];assert.equal(bucket.from,"2024-02-01");assert.equal(bucket.to,"2024-02-29");assert.equal(sumTimes(bucketTimes(bucket,61000)),60000);assert.equal(sumTimes(bucketTimes(bucket,121000)),120000);assert.equal(bucket.completed.size,0);assert.equal(buildStatsBuckets(sessions,"all","0000-01-01","9999-12-31").length,1);});
 
 test("遅れて返るメモ保存より新しい確定内容を優先する",async()=>{let first=true;const writes:MemoWrite[]=[];const store=new SessionMemosStore("a",async job=>{writes.push({...job});return{id:job.id,memo:job.memo,memoRevision:1};},()=>{if(first){first=false;return"別画面の最新版";}},storage(),60000);try{store.observe("one","");store.edit("one","古い保存結果");await store.flush("one");assert.equal(store.getSnapshot("one").memo,"別画面の最新版");store.edit("one","次の入力");await store.flush("one");assert.equal(writes[1].expectedMemo,"別画面の最新版");}finally{store.dispose();}});
+
+test("削除済み記録の下書きと保存予約を片付け、再読込で復元しない",async()=>{
+  const disk=storage();let writes=0;const store=new SessionMemosStore("a",async job=>{writes++;return{id:job.id,memo:job.memo};},()=>{},disk,20);
+  try{store.observe("one","");store.edit("one","保存して削除");store.setEditing("one",true);assert.equal(await store.flush("one"),true);store.discard("one");assert.equal(store.isEditing("one"),false);assert.equal(store.hasUnsaved(),false);await new Promise(r=>setTimeout(r,40));assert.equal(writes,1);
+    const next=new SessionMemosStore("a",async job=>({id:job.id,memo:job.memo}),()=>{},disk);try{assert.equal(next.getSnapshot("one").memo,"");}finally{next.dispose();}
+  }finally{store.dispose();}
+});

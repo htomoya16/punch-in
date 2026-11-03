@@ -18,7 +18,8 @@ function job(action,payload,revision=state.revision){return{action,payload,expec
 async function act(action,payload,expected=200){const r=await post(job(action,payload));assert.equal(r.status,expected,JSON.stringify(r.data));if(r.data.state)state=r.data.state;return r.data;}
 try {
   assert.equal((await get('/api/state',false)).status,401);check('unauthenticated access denied');
-  assert.equal((await post(job('preferences',state.preferences),{Origin:'https://example.invalid'})).status,403);check('cross-origin writes denied');
+  // An empty, separate connection verifies rejection without leaving an unread body in the local proxy.
+  const foreign=await fetch(base+'/api/action',{method:'POST',headers:{...authHeaders,'Content-Type':'application/json',Origin:'https://example.invalid',Connection:'close'},body:''});assert.equal(foreign.status,403);check('cross-origin writes denied');
   if(state.sessions.some(s=>s.endedAt===null))throw new Error('Stop the local running timer before API tests');
   await act('category',{id:categoryId,name:'API検証',color:'#168ab5',hidden:false,archived:false,position:900});check('category creation');
   const jobs=[job('punch',{categoryId}),job('punch',{categoryId})];
@@ -26,8 +27,8 @@ try {
   assert.equal(state.sessions.filter(s=>s.endedAt===null).length,1);const first=state.sessions.find(s=>s.endedAt===null);ids.push(first.id);check('simultaneous requests create exactly one timer');
   const revision=state.revision;const winner=jobs[race.findIndex(r=>r.status===200)];const replay=await post(winner);assert.equal(replay.status,200);assert.equal(replay.data.state.revision,revision);assert.equal(replay.data.state.sessions.filter(s=>s.endedAt===null).length,1);check('same mutation retry is idempotent');
   const other=state.categories.find(c=>c.id!==categoryId&&!c.archived).id;
-  await act('punch',{categoryId:other});const second=state.sessions.find(s=>s.endedAt===null);ids.push(second.id);assert.equal(state.sessions.find(s=>s.id===first.id).endedAt,second.startedAt);check('switch ends and starts at the same server instant');
-  await act('punch',{categoryId:other});assert.equal(state.sessions.filter(s=>s.endedAt===null).length,0);check('same button stops timer');
+  await act('punch',{categoryId:other});const second=state.sessions.find(s=>s.endedAt===null);assert.equal(second.id,first.id);assert.equal(second.work.members.length,2);check('another button adds parallel work to the same record');
+  await act('punch',{categoryId:other});assert.equal(state.sessions.find(s=>s.id===first.id).endedAt,null);await act('punch',{categoryId});assert.equal(state.sessions.filter(s=>s.endedAt===null).length,0);check('same button stops only its work; last stop ends the record');
   const manualId=randomUUID();ids.push(manualId);const start=Date.parse('2020-01-02T03:00:00+09:00'),end=Date.parse('2020-01-02T06:00:00+09:00');
   await act('session',{id:manualId,categoryId,startedAt:start,endedAt:end,memo:'境界の検証'});let manual=state.sessions.find(s=>s.id===manualId);assert.equal(manual.businessDay,'2020-01-01');assert.equal(manual.endedAt-manual.startedAt,3*3600000);check('cross-cutoff manual entry attributed to start day');
   await act('preferences',{...state.preferences,dayStart:480});manual=state.sessions.find(s=>s.id===manualId);assert.equal(manual.dayStart,300);assert.equal(manual.businessDay,'2020-01-01');check('settings do not rewrite historical rules');

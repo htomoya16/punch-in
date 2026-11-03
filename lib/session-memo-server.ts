@@ -4,15 +4,12 @@ export const sessionMemoSchema = z.object({id:z.string().min(1).max(100),memo:z.
 export type MemoWrite = z.infer<typeof sessionMemoSchema>;
 export async function writeSessionMemo(db:D1Database,user:string,input:MemoWrite) {
   if(input.categoryId){
-    const index=await db.prepare("SELECT j.key AS idx FROM sessions,json_each(sessions.work,'$.members') j WHERE user_id=? AND sessions.id=? AND json_extract(j.value,'$.categoryId')=?").bind(user,input.id,input.categoryId).first<{idx:number}>();
-    if(!index)throw new HttpError(404,"作業が見つかりません");
-    const path=`$.members[${index.idx}].memo`;
     const result=await db.batch<Record<string,unknown>>([
-      db.prepare("UPDATE sessions SET work=json_set(work,?,?),memo=CASE WHEN category_id=? THEN ? ELSE memo END WHERE user_id=? AND id=? AND json_extract(work,?)=? AND json_extract(work,?)<>? RETURNING id").bind(path,input.memo,input.categoryId,input.memo,user,input.id,path,input.expectedMemo,path,input.memo),
+      db.prepare("UPDATE sessions SET work=json_set(work,'$.members['||(SELECT key FROM json_each(sessions.work,'$.members') WHERE json_extract(value,'$.categoryId')=?)||'].memo',?),memo=CASE WHEN category_id=? THEN ? ELSE memo END WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM json_each(sessions.work,'$.members') WHERE json_extract(value,'$.categoryId')=? AND json_extract(value,'$.memo')=?) AND EXISTS(SELECT 1 FROM json_each(sessions.work,'$.members') WHERE json_extract(value,'$.categoryId')=? AND json_extract(value,'$.memo')<>?) RETURNING id").bind(input.categoryId,input.memo,input.categoryId,input.memo,user,input.id,input.categoryId,input.expectedMemo,input.categoryId,input.memo),
       db.prepare("UPDATE preferences SET memo_revision=memo_revision+1 WHERE user_id=? AND changes()>0").bind(user),
-      db.prepare("SELECT json_extract(s.work,?) AS memo,p.memo_revision AS revision FROM sessions s JOIN preferences p ON s.user_id=p.user_id WHERE s.user_id=? AND s.id=?").bind(path,user,input.id)
+      db.prepare("SELECT json_extract(j.value,'$.memo') AS memo,p.memo_revision AS revision FROM sessions s JOIN preferences p ON s.user_id=p.user_id JOIN json_each(s.work,'$.members') j WHERE s.user_id=? AND s.id=? AND json_extract(j.value,'$.categoryId')=?").bind(user,input.id,input.categoryId)
     ]);
-    const current=result[2].results[0];if(!current)throw new HttpError(404,"記録が見つかりません");
+    const current=result[2].results[0];if(!current)throw new HttpError(404,"作業が見つかりません。入力内容は下書きに残っています");
     if(current.memo!==input.memo)throw new HttpError(409,"別の画面でメモが更新されています",{currentMemo:current.memo});
     return {id:input.id,memo:input.memo,memoRevision:Number(current.revision)};
   }

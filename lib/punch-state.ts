@@ -4,11 +4,14 @@ import { businessDay } from "./time";
 
 /** Render a provisional result without changing the last confirmed state or revision. */
 export function projectPunch(state: AppState, pending: PendingPunch): AppState {
+  try{return projectPunchUnchecked(state,pending);}catch{return state;}
+}
+function projectPunchUnchecked(state: AppState, pending: PendingPunch): AppState {
   if (state.revision !== pending.baseRevision) return state;
   if(pending.workId&&pending.control){const current=state.sessions.find(s=>s.id===pending.workId);if(!current)return state;const changed=controlWork(current,pending.control,pending.categoryId,pending.at);return {...state,sessions:state.sessions.map(s=>s.id===changed.id?changed:s)};}
   const running = state.sessions.find(s => s.endedAt === null);
   const at = Math.max(pending.at, running?.startedAt ?? 0, state.sessions[0]?.endedAt ?? 0);
-  if(running?.work){const m=running.work.members.find(m=>m.categoryId===pending.categoryId);if(m&&m.state!=="finished"){const changed=controlWork(running,m.state==="paused"?"resume":"finish",m.categoryId,at);return {...state,sessions:state.sessions.map(s=>s.id===changed.id?changed:s)};}const closed=controlWork(running,"end","",at);return projectPunch({...state,sessions:state.sessions.map(s=>s.id===closed.id?closed:s)},pending);}
+  if(running&&(running.work||running.categoryId!==pending.categoryId)){const m=running.work?.members.find(m=>m.categoryId===pending.categoryId);const changed=controlWork(running,m?.state==='active'?"finish":m?.state==='paused'?"resume":"join",pending.categoryId,at);return {...state,sessions:state.sessions.map(s=>s.id===changed.id?changed:s)};}
   const sessions = state.sessions.map(s => s.id === running?.id ? { ...s, endedAt: at, updatedAt: at } : s);
   if (running?.categoryId !== pending.categoryId) sessions.unshift({
     id: `pending:${pending.mutationId}`, categoryId: pending.categoryId,

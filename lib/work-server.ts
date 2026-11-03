@@ -1,17 +1,21 @@
 import {z} from 'zod';
 import type {Session,PunchDelta} from './model';
-import {controlWork,type WorkControl} from './work';
+import {controlWork,removeWork,members,type WorkControl} from './work';
 import {sessionFromRow} from './session-row';
 import {HttpError} from './errors';
-export const workInput=z.object({id:z.string().min(1).max(100),control:z.enum(['join','pause','resume','finish','end','allocate']),categoryId:z.string().min(1).max(100).optional(),mode:z.enum(['auto','ratio','manual']).optional(),values:z.record(z.string(),z.number().finite().min(0).max(315576000000)).optional()});
-/** Preserve separately saved memos in the same atomic structural update. Member order is append-only. */
+export const workInput=z.object({id:z.string().min(1).max(100),control:z.enum(['join','pause','resume','finish','end','allocate','remove']),categoryId:z.string().min(1).max(100).optional(),mode:z.enum(['auto','ratio','manual']).optional(),values:z.record(z.string(),z.number().finite().min(0).max(315576000000)).optional()});
+/** Preserve separately saved memos in the same atomic structural update. Resolve old memo positions by category, including after individual deletion. */
 export function workUpdate(db:D1Database,user:string,old:Session,next:Session,token:string){
   let expression='json(?)';const args:(string|number|null)[]=[JSON.stringify(next.work)];
-  for(let i=0;i<(old.work?.members.length??1);i++){
+  for(const [i,m]of next.work!.members.entries()){
+    const j=members(old).findIndex(x=>x.categoryId===m.categoryId);if(j<0)continue;
     expression=`json_set(${expression},?,${old.work?'json_extract(work,?)':'memo'})`;
-    args.push(`$.members[${i}].memo`);if(old.work)args.push(`$.members[${i}].memo`);
+    args.push(`$.members[${i}].memo`);if(old.work)args.push(`$.members[${j}].memo`);
   }
-  return db.prepare(`UPDATE sessions SET work=${expression},ended_at=?,updated_at=? WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=?)`).bind(...args,next.endedAt,next.updatedAt,user,old.id,user,token);
+  const primary=members(old).findIndex(m=>m.categoryId===next.categoryId);
+  const mirror=primary<0?'?':old.work?'json_extract(work,?)':'memo';
+  if(primary<0)args.push(next.memo);else if(old.work)args.push(`$.members[${primary}].memo`);
+  return db.prepare(`UPDATE sessions SET work=${expression},memo=${mirror},category_id=?,ended_at=?,updated_at=? WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=?)`).bind(...args,next.categoryId,next.endedAt,next.updatedAt,user,old.id,user,token);
 }
 export async function performWork(db:D1Database,user:string,input:{payload?:unknown;expectedRevision:number;mutationId:string;pressedAt?:number},receivedAt:number):Promise<PunchDelta|null>{
   const p=workInput.parse(input.payload);
@@ -24,7 +28,7 @@ export async function performWork(db:D1Database,user:string,input:{payload?:unkn
   if(Number(pref?.revision)!==input.expectedRevision)throw new HttpError(409,'別の画面で更新されました。もう一度操作してください');
   if(!sr.results[0])throw new HttpError(404,'記録が見つかりません');
   const old=sessionFromRow(sr.results[0]);let next:Session;
-  if(p.control==='allocate'){
+  if(p.control==='remove'){try{next=removeWork(old,p.categoryId??'',receivedAt);}catch(error){throw new HttpError(400,(error as Error).message);}}else if(p.control==='allocate'){
     if(!old.work||old.endedAt===null)throw new HttpError(400,'計測を終了してから配分を編集してください');
     const mode=p.mode??'auto',values=p.values??{};
     if(mode!=='auto'&&(old.work.members.some(m=>values[m.categoryId]===undefined)||Object.keys(values).length!==old.work.members.length))throw new HttpError(400,'すべての作業の配分を指定してください');

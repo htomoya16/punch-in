@@ -32,20 +32,15 @@ export async function performPunch(d: D1Database, user: string, input: { payload
   const guard = "EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=?)";
   const statements = [d.prepare("UPDATE preferences SET revision=revision+1,mutation_token=? WHERE user_id=? AND revision=?").bind(input.mutationId, user, input.expectedRevision)];
   const changed: Session[] = [];
-  if(running?.work){
-    const m=running.work.members.find(m=>m.categoryId===categoryId);
-    const next=controlWork(running,m&&m.state!=="finished"?(m.state==="paused"?"resume":"finish"):"end",categoryId,at);
+  if(running&&(running.work||running.categoryId!==categoryId)){
+    const m=running.work?.members.find(m=>m.categoryId===categoryId);
+    const next=controlWork(running,m?.state==='active'?'finish':m?.state==='paused'?'resume':'join',categoryId,at);
     statements.push(workUpdate(d,user,running,next,input.mutationId));changed.push(next);
-    if(m&&m.state!=="finished") {const result=await d.batch(statements);if(!result[0].meta.changes)throw new HttpError(409,"別の画面で更新されました");return {baseRevision:input.expectedRevision,revision:input.expectedRevision+1,sessions:changed,serverNow:Date.now()};}
-  }else if (running) {
-    statements.push(d.prepare(`UPDATE sessions SET ended_at=?,updated_at=? WHERE user_id=? AND id=? AND ${guard}`).bind(at, at, user, running.id, user, input.mutationId));
-    changed.push({ ...running, endedAt: at, updatedAt: at });
-  }
-  if (running?.categoryId !== categoryId) {
-    const started: Session = { id: crypto.randomUUID(), categoryId, startedAt: at, endedAt: null, businessDay: businessDay(at, Number(p.day_start), String(p.timezone)),
-      dayStart: Number(p.day_start), timezone: String(p.timezone), memo: "", createdAt: at, updatedAt: at };
-    statements.push(d.prepare(`INSERT INTO sessions (user_id,id,category_id,started_at,ended_at,business_day,day_start,timezone,memo,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${guard}`).bind(user, started.id, categoryId, at, null, started.businessDay, started.dayStart, started.timezone, "", at, at, user, input.mutationId));
-    changed.unshift(started);
+  }else if(running){
+    statements.push(d.prepare(`UPDATE sessions SET ended_at=?,updated_at=? WHERE user_id=? AND id=? AND ${guard}`).bind(at,at,user,running.id,user,input.mutationId));changed.push({...running,endedAt:at,updatedAt:at});
+  }else{
+    const started:Session={id:crypto.randomUUID(),categoryId,startedAt:at,endedAt:null,businessDay:businessDay(at,Number(p.day_start),String(p.timezone)),dayStart:Number(p.day_start),timezone:String(p.timezone),memo:'',createdAt:at,updatedAt:at};
+    statements.push(d.prepare(`INSERT INTO sessions (user_id,id,category_id,started_at,ended_at,business_day,day_start,timezone,memo,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ${guard}`).bind(user,started.id,categoryId,at,null,started.businessDay,started.dayStart,started.timezone,'',at,at,user,input.mutationId));changed.push(started);
   }
   const result = await d.batch(statements);
   if (!result[0].meta.changes) throw new HttpError(409, "別の画面で更新されました。もう一度操作してください");

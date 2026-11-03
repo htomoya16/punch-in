@@ -25,7 +25,7 @@ Content-Type: application/json。ブラウザからのクロスサイトリク�
 {"punchDelta":{"baseRevision":0,"revision":1,"sessions":[],"serverNow":1793556000000}}
 ```
 
-sessionsは実際に開始・終了した最大2件。クライアントはbaseRevision一致時だけ差分を反映し、それより新しい確定データを古い応答で上書きしない。revisionに欠落があれば全体を再取得する。直前の同じmutationIdの再試行では、処理を繰り返さず `{state}` を返す。
+sessionsは実際に開始・終了した最大2件（通常の並行追加は親1件）。クライアントはbaseRevision一致時だけ差分を反映し、それより新しい確定データを古い応答で上書きしない。revisionに欠落があれば全体を再取得する。直前の同じmutationIdの再試行では、処理を繰り返さず `{state}` を返す。
 
 打刻のルートフィールド `pressedAt` は任意のUnixミリ秒。クライアントはサーバーとの時刻差を補正して送信する。サーバーは受信前60秒〜受信後2秒の整数のみ受け入れ、未来は受信時刻へ切り詰める。範囲外・省略は受信時刻を使う。直近の開始・終了より前にならないよう調整する。APIレスポンスのServer-Timingはサーバー内の処理時間を示す。
 
@@ -118,9 +118,9 @@ v3ではdailyNotesに日付・Markdown・更新日時に加え、任意の`docum
 
 ## 並行作業（v4）
 
-`POST /api/action`の`action: "work"`は`{id,control,categoryId?}`を受け付ける。controlは`join`・`pause`・`resume`・`finish`・`end`。終了後の配分は`{id,control:"allocate",mode:"auto"|"ratio"|"manual",values?:{[categoryId]:number}}`。manualの値は独立したミリ秒、ratioは非負の重み（合計は正）。共通の打刻時刻を変更しない。通常は`{punchDelta}`、直前の再試行は`{state}`を返す。
+`POST /api/action`の`action: "work"`は`{id,control,categoryId?}`を受け付ける。controlは`join`・`pause`・`resume`・`finish`・`end`・`remove`。`remove`はcategoryIdの作業だけを削除し、最後の1作業はdeleteSessionで記録全体を削除する。終了後の配分は`{id,control:"allocate",mode:"auto"|"ratio"|"manual",values?:{[categoryId]:number}}`。manualの値は独立したミリ秒、ratioは非負の重み（合計は正）。共通の打刻時刻を変更しない。通常は`{punchDelta}`、直前の再試行は`{state}`を返す。
 
-Sessionの任意フィールド`work`は`{version:1,mode,members,intervals}`。membersは`{categoryId,memo,state:"active"|"paused"|"finished",weight,manualMs?}`、intervalsは`{start,end:null|number,categoryIds:string[]}`。親記録は同時に1件、内部区間は重複せず、最大50作業・10000区間。存在しないworkは従来の100%単独記録として解釈する。
+Sessionの任意フィールド`work`は`{version:1,mode,members,intervals}`。membersは`{categoryId,memo,state:"active"|"paused"|"finished",weight,manualMs?,startedAt?,endedAt?}`、intervalsは`{start,end:null|number,categoryIds:string[]}`。親記録は同時に1件、内部区間は重複せず、最大50作業・10000区間。存在しないworkは従来の100%単独記録として解釈する。
 
 `PUT /api/session-memo`は並行記録に`categoryId`を追加し、対象メモだけCASで保存する。親memoは先頭作業との互換ミラー。並行記録を旧session編集APIで上書きすることは拒否する。
 
@@ -131,3 +131,7 @@ Sessionの任意フィールド`work`は`{version:1,mode,members,intervals}`。m
 - `POST /api/daily-note` → `{day}`。未作成のときだけデフォルトを複製する。既存の本文・空にしたメモは変更しない。GETは作成しない。
 - DailyNoteとNoteWriteは任意の`template:{id,fingerprint}`を持つ。fingerprintはIDを除いたブロック構造のSHA-256（末尾追加後は空文字）。本文と同じCASで保存する。
 - JSON v4は`templates`（CASのversionを除く本体）と`defaultTemplateId`、`sessions.work`、`dailyNotes.template`を含む。旧v1〜v3も受け付ける。既存テンプレートIDは上書きせず、デフォルトは個人設定を取り込む場合だけ復元する。
+
+通常のpunchは、未計測の別カテゴリを並行追加し、計測中ならその作業を終了、一時停止中なら再開する。親記録がなければ新しく開始する。個別削除でも親IDと開始側の記録日を維持し、先頭カテゴリが変わったときはcategoryIdと互換memoを残る先頭作業に合わせる。作業別メモの書き込みはカテゴリIDで対象を原子的に解決する。
+
+作業別のstartedAt/endedAtは任意の追加情報なのでJSON v4のまま引き継げる。終了時刻は一時停止の終端と区別して保存する。旧データの個別時刻は参加区間から推定し、元データを書き換えない。履歴CSVの開始・終了も作業ごとの時刻を使い、集計CSVは合計と計上時間を別の行で出力する。

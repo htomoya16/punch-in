@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { noteExportSchema } from "./daily-note-validation";
+import { noteExportSchema,legacyNoteExportSchema } from "./daily-note-validation";
 import { businessDay } from "./time";
 const id = z.string().min(1).max(100);
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -11,8 +11,8 @@ export const sessionSchema = z.object({ id, categoryId:id, startedAt:z.number().
   if(s.businessDay !== businessDay(s.startedAt,s.dayStart,s.timezone)) ctx.addIssue({code:"custom",message:"記録の日付が開始時刻・設定と一致しません"});
 });
 const backupBase = z.object({ format:z.literal("punch-in"), exportedAt:z.string().datetime(), preferences:preferenceSchema, categories:z.array(categorySchema).max(500), sessions:z.array(sessionSchema).max(20000) });
-export const backupSchema = z.discriminatedUnion("version", [backupBase.extend({version:z.literal(1)}),backupBase.extend({version:z.literal(2),dailyNotes:z.array(noteExportSchema).max(20000)})]).superRefine((b,ctx) => {
-  if(b.version===2 && new Set(b.dailyNotes.map(n=>n.day)).size!==b.dailyNotes.length) ctx.addIssue({code:"custom",message:"同じ日付のメモが重複しています"});
+export const backupSchema = z.discriminatedUnion("version", [backupBase.extend({version:z.literal(1)}),backupBase.extend({version:z.literal(2),dailyNotes:z.array(legacyNoteExportSchema).max(20000)}),backupBase.extend({version:z.literal(3),dailyNotes:z.array(noteExportSchema).max(20000)})]).superRefine((b,ctx) => {
+  if(b.version!==1 && new Set(b.dailyNotes.map(n=>n.day)).size!==b.dailyNotes.length) ctx.addIssue({code:"custom",message:"同じ日付のメモが重複しています"});
   if(new Set(b.categories.map(c=>c.id)).size !== b.categories.length || new Set(b.sessions.map(s=>s.id)).size !== b.sessions.length) ctx.addIssue({code:"custom",message:"ファイル内に重複したIDがあります"});
   const ids = new Set(b.categories.map(c=>c.id));
   if(b.sessions.some(s=>!ids.has(s.categoryId))) ctx.addIssue({code:"custom",message:"作業の種類が見つからない記録があります"});

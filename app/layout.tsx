@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Punch in",
-  description: "研究、個人開発、就活。あなたの時間を、ひと押しで記録。",
+  description: "自分に合うボタンと日の区切りで、時間とメモを記録。",
   manifest: "/site.webmanifest",
   appleWebApp: { capable: true, title: "Punch in", statusBarStyle: "default" },
   icons: {

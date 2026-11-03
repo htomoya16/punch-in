@@ -1,3 +1,4 @@
+import {isNoteDocument,type NoteDocument} from "./note-document";
 import { z } from "zod";
 import { MAX_NOTE_LENGTH } from "./daily-note";
 export const noteDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付を確認してください").refine(day => {
@@ -5,5 +6,7 @@ export const noteDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付を�
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day;
 }, "日付を確認してください");
 export const noteMarkdownSchema = z.string().max(MAX_NOTE_LENGTH, "メモは10万文字以内にしてください");
-export const noteExportSchema = z.object({ day: noteDaySchema, markdown: noteMarkdownSchema, updatedAt: z.number().int().min(0).max(253402300799000) });
-export const noteWriteSchema = z.object({ day: noteDaySchema, markdown: noteMarkdownSchema, expectedVersion: z.number().int().nonnegative(), mutationId: z.string().uuid() });
+export const noteDocumentSchema=z.custom<NoteDocument>(isNoteDocument,"メモの構造を確認してください");
+export const legacyNoteExportSchema = z.object({ day: noteDaySchema, markdown: noteMarkdownSchema, updatedAt: z.number().int().min(0).max(253402300799000) });
+export const noteExportSchema=legacyNoteExportSchema.extend({document:noteDocumentSchema.optional(),originalMarkdown:noteMarkdownSchema.optional()});
+export const noteWriteSchema = z.object({ day: noteDaySchema, markdown: noteMarkdownSchema, expectedVersion: z.number().int().nonnegative(), mutationId: z.string().uuid(),document:noteDocumentSchema.optional() });

@@ -39,11 +39,11 @@
 - `lib/daily-note-server.ts` が所有者スコープ・CAS・再試行を担当する。空本文も版を残す。再実装時も古い保存で新しい内容を上書きしない設計を維持する。
 - `lib/daily-notes-store.ts` は日付別の保存キューと下書き復元。入力は800ms、ブラウザ下書きは150msでまとめる。送信中の追加入力を古い応答で置き換えない。応答不明の再試行は同じmutationId・本文・expectedVersionを使う。
 - ブラウザ下書きはユーザーIDと日付で分離する。保存先はlocalStorageで、端末をまたぐ未送信下書きの同期は行わない。プライベートブラウズや容量不足時もサーバー保存は続くが、ローカル復元はブラウザの制限を受ける。
-- `app/components/notes/` は初回に開いたときだけ読み込み、プレビューのMarkdownパーサーはプレビューへ切り替えたときだけ読み込む。打刻画面の毎秒更新とメモ入力は別の状態にする。
-- v2移行はdailyNotesのday・markdown・updatedAtをそのまま引き継ぐ。認証IDは再関連づけ、versionは取り込み先で1から始める。すでにある日付は上書きしない。v1は日別メモを変更しない。
-- `npm run test:notes-api` は起動済みのローカルWorker専用。本人・他人の分離、CAS、再試行、304、打刻との独立、v1/v2移行を検証する。本番では実行しない。
+- `app/components/notes/` は初回に開いたときだけ読み込み、BlockNote本体もメモの取得後にクライアントで読み込む。打刻画面の毎秒更新とメモ入力は別の状態にする。
+- v3移行はdailyNotesのday・markdown・updatedAt・document・originalMarkdownを引き継ぐ。認証IDは再関連づけ、versionは取り込み先で1から始める。すでにある日付は上書きしない。v1は日別メモを変更しない。
+- `npm run test:notes-api` は起動済みのローカルWorker専用。本人・他人の分離、CAS、再試行、304、打刻との独立、v1/v2/v3移行を検証する。本番では実行しない。
 
-参考: [react-markdown](https://github.com/remarkjs/react-markdown)、[remark-gfm](https://github.com/remarkjs/remark-gfm)、[D1 API](https://developers.cloudflare.com/d1/worker-api/d1-database/)。
+参考: [BlockNote](https://www.blocknotejs.org/docs)、[D1 API](https://developers.cloudflare.com/d1/worker-api/d1-database/)。
 
 ## セルでのメモ編集と集計
 
@@ -54,3 +54,12 @@
 - `npm run test:session-memo-api` は起動済みローカルWorker用。所有者、CSRF、CAS、再試行、打刻との並行保存、時刻維持、バックアップを検証する。本番で実行しない。
 
 参考: [React外部ストア](https://react.dev/reference/react/useSyncExternalStore)、[ホバー・フォーカス表示](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)、[D1バッチ](https://developers.cloudflare.com/d1/worker-api/d1-database/)。
+
+## ブロック編集と履歴
+
+- 0004で`daily_notes.document`と`original_markdown`を追加する。元のMarkdownを初回の構造保存と同じSQLで保持する。過去のSQLを再適用しない。
+- `note-document.ts`はエディターのランタイムを読み込まず、JSONの構造・サイズ・種類・安全なリンクを検証する。BlockNoteの未設定値はJSONへ正規化してから保存する。
+- `DailyNotesStore`は本文と構造の組で差分・CAS・再試行を扱う。旧ブラウザ下書きも復元する。保存応答でエディター全体を再生成せず、カーソルとUndoを維持する。フォーカス中はポーリングによる差し替えを避け、競合はCASで検知する。
+- `history.ts`が日付の所属と並びを扱い、`history-feed.tsx`が日単位の追加描画と固定タイムラインを制御する。閲覧日とメモを開いた日を別の状態に保つ。
+- 履歴APIのDBページングは未導入で、stateは従来どおり全記録を取得する。表示は日・件数で分割するが、長年の大量記録で通信量も抑える場合はAPIのカーソル取得を追加する。
+- `npm run test:blocks-api`はローカルWorker専用。旧メモ移行、構造だけの競合、旧クライアントの拒否、v3の復元、日付インデックスの所有者分離を検証する。

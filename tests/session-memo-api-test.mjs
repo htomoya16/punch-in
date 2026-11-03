@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 const base=process.env.TEST_BASE_URL??'http://127.0.0.1:8787';if(!['127.0.0.1','localhost'].includes(new URL(base).hostname))throw Error('Local-only tests');
-// Miniflare may close sockets after rejecting an unread request body.
-// Separate test connections keep auth/CSRF checks independent.
+// Miniflare can restart its local proxy after an early rejection with an
+// unread body. Empty-body auth/CSRF probes still assert the early gates,
+// without disrupting the subsequent real writes. Use separate connections.
 const actor='memo-api-'+randomUUID(),headers={'oai-authenticated-user-id':actor,'oai-authenticated-user-email':'qa@sites.test','Content-Type':'application/json',Connection:'close',Origin:base};
 async function get(path){const r=await fetch(base+path,{headers});return{status:r.status,data:r.status===304?null:await r.json()};}
 async function action(action,payload,revision,mode){const r=await fetch(base+'/api/action',{method:'POST',headers,body:JSON.stringify({action,payload,expectedRevision:revision,mutationId:randomUUID(),responseMode:mode??'state'})});return{status:r.status,data:await r.json()};}
 async function put(memo,expectedMemo='',extra={}){const r=await fetch(base+'/api/session-memo',{method:'PUT',headers:{...headers,...extra},body:JSON.stringify({id:'memo-record',memo,expectedMemo})});return{status:r.status,data:await r.json()};}
 let passed=0;const check=name=>console.log('ok',++passed,'-',name);let state=(await get('/api/state')).data;
 let result=await action('session',{id:'memo-record',categoryId:state.categories[0].id,startedAt:1000000,endedAt:1100000,memo:''},state.revision);assert.equal(result.status,200);state=result.data.state;
-const anonymous=await fetch(base+'/api/session-memo',{method:'PUT',headers:{'Content-Type':'application/json',Connection:'close'},body:'{}'});await anonymous.text();assert.equal(anonymous.status,401);check('auth required');
-assert.equal((await put('denied','',{Origin:'https://example.invalid'})).status,403);check('cross-origin rejected');
+const anonymous=await fetch(base+'/api/session-memo',{method:'PUT',headers:{'Content-Type':'application/json',Connection:'close'}});await anonymous.text();assert.equal(anonymous.status,401);check('auth required');
+const forbidden=await fetch(base+'/api/session-memo',{method:'PUT',headers:{...headers,Origin:'https://example.invalid'}});await forbidden.text();assert.equal(forbidden.status,403);check('cross-origin rejected');
 result=await put('直接入力');assert.equal(result.status,200);assert.equal(result.data.memoRevision,1);assert.equal((await get('/api/state')).data.revision,state.revision);check('memo updates independent counter');
 await put('直接入力');assert.equal((await get('/api/state')).data.memoRevision,1);check('lost-response replay is idempotent');
 assert.equal((await get(`/api/state?revision=${state.revision}&memoRevision=0`)).status,200);assert.equal((await get(`/api/state?revision=${state.revision}&memoRevision=1`)).status,304);check('memo-aware conditional state reads');

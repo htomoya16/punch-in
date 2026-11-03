@@ -26,6 +26,7 @@ npm run typecheck
 npm test
 npm run test:api # ローカル開発サーバー起動中。テスト用の種類・記録を作成する
 npm run test:session-memo-api # セルのメモ保存・打刻との並行操作を検証
+npm run test:blocks-api # ブロックメモの移行・構造保存・復元を検証
 npm run test:notes-api # ビルド済みローカルWorkerで日別メモ・移行・競合を検証
 npm run test:punch-api # ビルド済みWorkerで差分応答・再試行・条件付き取得を検証
 PERF_RECORDS=5000 npm run test:punch-api # 検証用データを作り通信量・待ち時間を比較
@@ -58,3 +59,7 @@ npmのキャッシュが書き込み不可の場合は、`npm_config_cache=/tmp/
 `.openai/hosting.json` がSitesのプロジェクトIDとD1バインディングを保持する。Sitesスキルのsource helperでソースのcommit/pushとビルド成果物のパッケージを作り、そのcommitとarchiveを保存・デプロイする。本番マイグレーションはSitesがデプロイ時に適用する。既存のSite IDを維持し、同じアプリを再登録しない。
 
 GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履歴で同期する。アプリの閲覧範囲はSitesで別に管理し、現在は所有者限定。GitHubのコード変更だけではSitesへ自動公開されない。`.wrangler/`（ローカルDB）、`.sites-runtime/`、`.env*`、認証情報、実際の個人バックアップはコミットしない。
+
+## コミットメッセージ
+
+`<type>: <変更の内容>`に揃えます。機能追加は`feat`、修正は`fix`、文書は`docs`、構造整理は`refactor`、テストは`test`を使い、何を変えたかを具体的に書きます。

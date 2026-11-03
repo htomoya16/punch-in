@@ -89,14 +89,14 @@ export async function action(request: Request, user: string, receivedAt = Date.n
     const p=z.object({backup:z.unknown(),includePreferences:z.boolean()}).parse(input.payload); const plan=planImport(state,p.backup,await readDailyNoteDays(d,user));
     if(plan.categories.length) write(`INSERT INTO categories (user_id,id,name,color,hidden,archived,position) SELECT ?,json_extract(value,'$.id'),json_extract(value,'$.name'),json_extract(value,'$.color'),json_extract(value,'$.hidden'),json_extract(value,'$.archived'),json_extract(value,'$.position') FROM json_each(?) WHERE ${guard}`,[user,JSON.stringify(plan.categories)]);
     if(plan.sessions.length) write(`INSERT INTO sessions (user_id,id,category_id,started_at,ended_at,business_day,day_start,timezone,memo,created_at,updated_at) SELECT ?,json_extract(value,'$.id'),json_extract(value,'$.categoryId'),json_extract(value,'$.startedAt'),json_extract(value,'$.endedAt'),json_extract(value,'$.businessDay'),json_extract(value,'$.dayStart'),json_extract(value,'$.timezone'),json_extract(value,'$.memo'),json_extract(value,'$.createdAt'),json_extract(value,'$.updatedAt') FROM json_each(?) WHERE ${guard}`,[user,JSON.stringify(plan.sessions)]);
-    if(plan.dailyNotes.length) write(`INSERT INTO daily_notes (user_id,day,markdown,version,mutation_id,updated_at) SELECT ?,json_extract(value,'$.day'),json_extract(value,'$.markdown'),1,?,json_extract(value,'$.updatedAt') FROM json_each(?) WHERE ${guard} ON CONFLICT(user_id,day) DO NOTHING`,[user,token,JSON.stringify(plan.dailyNotes)]);
+    if(plan.dailyNotes.length) write(`INSERT INTO daily_notes (user_id,day,markdown,version,mutation_id,updated_at,document,original_markdown) SELECT ?,json_extract(value,'$.day'),json_extract(value,'$.markdown'),1,?,json_extract(value,'$.updatedAt'),json_extract(value,'$.document'),json_extract(value,'$.originalMarkdown') FROM json_each(?) WHERE ${guard} ON CONFLICT(user_id,day) DO NOTHING`,[user,token,JSON.stringify(plan.dailyNotes)]);
     if(p.includePreferences) savePrefs(plan.backup.preferences);
   }
   const result=await d.batch(statements);
   if(!result[0].meta.changes) throw new HttpError(409,"別の画面で更新されました。もう一度操作してください");
   return {state:await readState(user)};
 }
-export function makeBackup(state: AppState, dailyNotes: DailyNoteExport[]=[]): Backup { return {format:"punch-in",version:2,exportedAt:new Date().toISOString(),preferences:state.preferences,categories:state.categories,sessions:state.sessions,dailyNotes}; }
+export function makeBackup(state: AppState, dailyNotes: DailyNoteExport[]=[]): Backup { return {format:"punch-in",version:3,exportedAt:new Date().toISOString(),preferences:state.preferences,categories:state.categories,sessions:state.sessions,dailyNotes}; }
 export async function stateResponse(user:string, revision?:number,memoRevision=0) {
   const current=await db().prepare("SELECT revision,seeded,memo_revision FROM preferences WHERE user_id=?").bind(user).first<{revision:number;seeded:number;memo_revision:number}>();
   if(!current || current.seeded<2) await initialize(user);

@@ -34,6 +34,8 @@ export const dailyNotes = sqliteTable("daily_notes", {
   userId: text("user_id").notNull(),
   day: text("day").notNull(),
   markdown: text("markdown").notNull().default(""),
+  document: text("document"),
+  originalMarkdown: text("original_markdown"),
   version: integer("version").notNull().default(1),
   mutationId: text("mutation_id").notNull().default(""),
   updatedAt: integer("updated_at").notNull(),

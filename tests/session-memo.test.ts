@@ -1,3 +1,4 @@
+import {historyDays} from "../lib/history";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {DatabaseSync} from "node:sqlite";
@@ -30,4 +31,11 @@ test("削除済み記録の下書きと保存予約を片付け、再読込で�
   try{store.observe("one","");store.edit("one","保存して削除");store.setEditing("one",true);assert.equal(await store.flush("one"),true);store.discard("one");assert.equal(store.isEditing("one"),false);assert.equal(store.hasUnsaved(),false);await new Promise(r=>setTimeout(r,40));assert.equal(writes,1);
     const next=new SessionMemosStore("a",async job=>({id:job.id,memo:job.memo}),()=>{},disk);try{assert.equal(next.getSnapshot("one").memo,"");}finally{next.dispose();}
   }finally{store.dispose();}
+});
+
+test("履歴は日付降順、メモだけの日と件数の少ない日をまとめ、期間・検索条件を尊重する",()=>{
+  const sessions=[record("old","2026-10-30",0,1000),record("new","2026-11-01",2000,3000)];
+  assert.deepEqual(historyDays(sessions,["2026-10-31","2026-11-03"],"2026-11-02","2026-11-02").map(g=>[g.day,g.sessions.length]),[["2026-11-02",0],["2026-11-01",1],["2026-10-31",0],["2026-10-30",1]]);
+  assert.deepEqual(historyDays(sessions,["2026-10-31"],"2026-10-31","2026-11-02").map(g=>g.day),["2026-11-02","2026-11-01","2026-10-31"]);
+  assert.deepEqual(historyDays(sessions,["2026-10-31"],"2026-11-02","2026-11-02",false).map(g=>g.day),["2026-11-02","2026-11-01","2026-10-30"]);
 });

@@ -1,4 +1,4 @@
-# API / JSON移行形式 v2
+# API / JSON移行形式 v3
 
 認証はSitesのSign in with ChatGPTを使用する。全エンドポイントは認証必須。サーバーは信頼済みのリクエストヘッダーからユーザーIDを解決し、クライアントが送る所有者IDは使用しない。レスポンスはno-store。
 
@@ -54,7 +54,7 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 ```json
 {
   "format": "punch-in",
-  "version": 2,
+  "version": 3,
   "exportedAt": "2026-11-01T15:00:00.000Z",
   "preferences": {
     "timezone": "Asia/Tokyo",
@@ -93,15 +93,15 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 
 ## GET /api/daily-note?day=YYYY-MM-DD
 
-認証済み本人の `{note:{day,markdown,version,updatedAt}}` を返す。未作成は空本文・version 0。`&version=N` が一致すれば304。日別メモの版は打刻のrevisionと独立し、stateには本文を含めない。
+認証済み本人の `{note:{day,markdown,version,updatedAt}}` を返す。未作成は空本文・version 0。`&version=N` が一致すれば304。日別メモの版は打刻のrevisionと独立し、stateには本文を含めない。v3で編集したメモは`document`（`{format:"blocknote",version:1,blocks:[...]}`）と`originalMarkdown`も返す。未移行のメモでは省略する。`?days=1`は本人のメモの日付だけを降順で返す。
 
 ## PUT /api/daily-note
 
-`{day,markdown,expectedVersion,mutationId}` をJSONで送る。本文は最大100000文字、リクエストは1MiB以内。実在する日付とUUIDを検証し、同一Originのみ受け付ける。成功は `{note}`。本人・日付・版が一致した場合にだけ保存し、版を1増やす。同じmutationId・本文の直後の再試行は同じ結果を返す。409は `{error,current:note}` を返し、クライアントは下書きを保持して利用者に選択させる。本文を空にしても行と版は残し、古い画面からの復活を防ぐ。
+`{day,markdown,document?,expectedVersion,mutationId}` をJSONで送る。本文は最大100000文字、構造は700000バイト以内、リクエストは1MiB以内。構造の種類・深さ・ID重複・リンクを検証する。実在する日付とUUIDを検証し、同一Originのみ受け付ける。成功は `{note}`。本人・日付・版が一致した場合にだけ保存し、版を1増やす。同じmutationId・本文の直後の再試行は同じ結果を返す。409は `{error,current:note}` を返し、クライアントは下書きを保持して利用者に選択させる。本文を空にしても行と版は残し、古い画面からの復活を防ぐ。
 
 ## 日別メモの移行
 
-v2ではdailyNotesに日付・生のMarkdown・更新日時を含める。ユーザーID、保存用mutationId、ローカル下書き、CASのversionは含めない。v1も受け付け、日別メモは変更しない。v2は日付重複を拒否し、取り込み先に同じ日付がある場合は既存を優先してスキップする。取り込み中の自動保存とも競合時に上書きしない。上限20000日、全ファイル16MB。
+v3ではdailyNotesに日付・Markdown・更新日時に加え、任意の`document`と`originalMarkdown`を含める。構造を保持する復元にはv3のJSONを使う。v2は従来のMarkdown形式として取り込み可能。ユーザーID、保存用mutationId、ローカル下書き、CASのversionは含めない。v1も受け付け、日別メモは変更しない。v2/v3は日付重複を拒否し、取り込み先に同じ日付がある場合は既存を優先してスキップする。取り込み中の自動保存とも競合時に上書きしない。上限20000日、全ファイル16MB。
 
 ## PUT /api/session-memo
 
@@ -110,3 +110,6 @@ v2ではdailyNotesに日付・生のMarkdown・更新日時を含める。ユー
 保存は打刻用revisionと別のmemoRevisionを増やす。打刻の楽観ロックを競合させず、stateの定期取得では両方の変更を検出する。直前の保存応答と古いstate・打刻差分が前後しても、確定したメモを巻き戻さない。
 
 時刻編集のsessionアクションには `expectedMemo` を任意で指定できる。編集画面を開いた後にメモが変わっていれば上書きせず409を返す。対応クライアントは指定する。
+
+
+ブロックへの初回保存時に、DBの既存Markdownを`originalMarkdown`へ一度だけ保持する。以後の編集で原文を上書きしない。CASと同一操作の再試行では、Markdownと構造の両方を比較する。構造保存済みのメモを、`document`を送らない旧クライアントから上書きする操作は409で拒否する。表や折りたたみの内容はJSONで保持し、Markdown出力は可搬な表現への変換として扱う。

@@ -8,7 +8,7 @@ export type AppState = { preferences: Preferences; categories: Category[]; sessi
 export type PunchDelta = { baseRevision: number; revision: number; sessions: Session[]; serverNow: number };
 export type PendingPunch = { categoryId: string; mutationId: string; baseRevision: number; at: number };
 type BackupBase = { format: "punch-in"; exportedAt: string; preferences: Preferences; categories: Category[]; sessions: Session[] };
-export type Backup = BackupBase & ({ version: 1 } | { version: 2; dailyNotes: import("./daily-note").DailyNoteExport[] });
+export type Backup = BackupBase & ({ version: 1 } | { version: 2 | 3; dailyNotes: import("./daily-note").DailyNoteExport[] });
 export const DEFAULT_CATEGORIES = [
   { id: "punch", name: "打刻", color: "#168ab5" },
 ];

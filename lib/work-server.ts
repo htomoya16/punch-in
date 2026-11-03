@@ -2,8 +2,10 @@ import {z} from 'zod';
 import type {Session,PunchDelta} from './model';
 import {controlWork,removeWork,memberKey,type WorkControl} from './work';
 import {sessionFromRow} from './session-row';
+import {editWorkTime} from './work-time';
+import {sessionSchema} from './validation';
 import {HttpError} from './errors';
-export const workInput=z.object({id:z.string().min(1).max(100),control:z.enum(['join','pause','resume','finish','end','pauseAll','resumeAll','allocate','remove']),categoryId:z.string().min(1).max(100).optional(),memberId:z.string().min(1).max(100).optional(),mode:z.enum(['auto','ratio','manual']).optional(),values:z.record(z.string(),z.number().finite().min(0).max(315576000000)).optional()});
+export const workInput=z.object({id:z.string().min(1).max(100),control:z.enum(['join','pause','resume','finish','end','pauseAll','resumeAll','allocate','remove','timing']),categoryId:z.string().min(1).max(100).optional(),memberId:z.string().min(1).max(100).optional(),startedAt:z.number().int().min(0).max(253402300799000).optional(),endedAt:z.number().int().min(0).max(253402300799000).nullable().optional(),mode:z.enum(['auto','ratio','manual']).optional(),values:z.record(z.string(),z.number().finite().min(0).max(315576000000)).optional()});
 /** Merge live memo values by stable entry ID in the same structural write. */
 export function workUpdate(db:D1Database,user:string,old:Session,next:Session,token:string){
   const json=JSON.stringify(next.work),primary=memberKey(next.work!.members[0]);
@@ -15,7 +17,7 @@ export function workUpdate(db:D1Database,user:string,old:Session,next:Session,to
   ))),memo=COALESCE(
     (SELECT json_extract(o.value,'$.memo') FROM json_each(sessions.work,'$.members') o WHERE COALESCE(json_extract(o.value,'$.id'),json_extract(o.value,'$.categoryId'))=?),
     CASE WHEN work IS NULL AND category_id=? THEN memo ELSE ? END
-  ),category_id=?,ended_at=?,updated_at=? WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=?)`).bind(json,json,primary,primary,next.memo,next.categoryId,next.endedAt,next.updatedAt,user,old.id,user,token);
+  ),category_id=?,started_at=?,ended_at=?,business_day=?,updated_at=? WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=?)`).bind(json,json,primary,primary,next.memo,next.categoryId,next.startedAt,next.endedAt,next.businessDay,next.updatedAt,user,old.id,user,token);
 }
 export async function performWork(db:D1Database,user:string,input:{payload?:unknown;expectedRevision:number;mutationId:string;pressedAt?:number},receivedAt:number):Promise<PunchDelta|null>{
   const p=workInput.parse(input.payload);
@@ -28,7 +30,11 @@ export async function performWork(db:D1Database,user:string,input:{payload?:unkn
   if(Number(pref?.revision)!==input.expectedRevision)throw new HttpError(409,'別の画面で更新されました。もう一度操作してください');
   if(!sr.results[0])throw new HttpError(404,'記録が見つかりません');
   const old=sessionFromRow(sr.results[0]);let next:Session;
-  if(p.control==='remove'){try{next=removeWork(old,p.memberId??p.categoryId??'',receivedAt);}catch(error){throw new HttpError(400,(error as Error).message);}}else if(p.control==='allocate'){
+  if(p.control==='timing'){
+    if(!p.memberId||p.startedAt===undefined||p.endedAt===undefined)throw new HttpError(400,'開始・終了時刻を指定してください');
+    try{next=sessionSchema.parse(editWorkTime(old,p.memberId,p.startedAt,p.endedAt,receivedAt));}catch(error){throw new HttpError(400,error instanceof Error?error.message:'日時を確認してください');}
+    if(next.endedAt!==next.startedAt){const overlap=await db.prepare('SELECT id FROM sessions WHERE user_id=? AND id<>? AND started_at<? AND COALESCE(ended_at,253402300799000)>? AND (ended_at IS NULL OR ended_at<>started_at) LIMIT 1').bind(user,old.id,next.endedAt??253402300799000,next.startedAt).first();if(overlap)throw new HttpError(400,'ほかの記録と時間が重なっています');}
+  }else if(p.control==='remove'){try{next=removeWork(old,p.memberId??p.categoryId??'',receivedAt);}catch(error){throw new HttpError(400,(error as Error).message);}}else if(p.control==='allocate'){
     if(!old.work||old.endedAt===null)throw new HttpError(400,'計測を終了してから配分を編集してください');
     const mode=p.mode??'auto',values=p.values??{};
     if(mode!=='auto'&&(old.work.members.some(m=>values[memberKey(m)]===undefined)||Object.keys(values).length!==old.work.members.length))throw new HttpError(400,'すべての作業の配分を指定してください');

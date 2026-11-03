@@ -68,3 +68,6 @@ GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履
 
 
 再打刻と週タイムラインの回帰テストは`npm test`に含まれる。起動したローカルWorkerでは`TEST_BASE_URL=http://127.0.0.1:8791 node tests/work-entries-api-test.mjs`で、再打刻・個別メモ・終了時刻・配分・JSON復元・個別削除を確認できる。
+
+
+日時編集の回帰検証は`npm test`と、ローカルWorkerに対する`TEST_BASE_URL=http://127.0.0.1:8792 node tests/work-time-api-test.mjs`で行う。ホイール共通部品は`app/components/fields/date-time-field.tsx`、記録日からの初期化は`lib/record-editor.ts`、並行記録の日時再構成は`lib/work-time.ts`を参照する。

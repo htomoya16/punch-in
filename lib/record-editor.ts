@@ -16,4 +16,7 @@ export function recordTimeForDay(day:string,now:number,preferences:Pick<Preferen
   throw new Error('日時を確認してください');
 }
 /** Opening and saving an unchanged editor must not round away stored milliseconds. */
-export function editedTime(value:string,original:number|null,timezone:string){return original!==null&&timeInput(original,timezone)===value?original:fromTimeInput(value,timezone);}
+export function editedTime(value:string,original:number|null,timezone:string){return original!==null&&(value.length===16||value.length===19)&&timeInput(original,timezone).slice(0,value.length)===value?original:fromTimeInput(value,timezone);}
+
+/** Preserve a saved fractional minute unless the user changes the visible minute value. */
+export function editedMinutes(value:string,original:number|null){const minutes=Number(value);if(!Number.isInteger(minutes)||minutes<0)throw new Error('作業時間は0以上の整数（分）で入力してください');return original!==null&&Math.floor(original/60000)===minutes?original:minutes*60000;}

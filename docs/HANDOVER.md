@@ -99,3 +99,6 @@
 - `lib/record-editor.ts`は記録日の初期時刻、月末補正、未変更時のミリ秒保持を担当。`app/components/fields/date-time-field.tsx`を単独・並行の両エディターで共有する。
 - `lib/work-time.ts`が対象の作業記録だけ日時を編集し、区間のイベントを時刻順に処理して重複のない内部区間へ再構成する。メモの最新値はworkUpdate内で記録IDを照合し、同じDB書き込みで引き継ぐ。
 - 履歴の通常遷移は週タイムラインの先頭、集計からの遷移は日付行へ位置合わせする。タイムラインの横位置は時刻の比率で保持し、拡大やメモ開閉で時刻が飛ばないようにする。固定するのは週の操作行だけ。
+
+
+分単位の表示はlib/time.tsのhm・durationLabel・minuteInput・minuteIsoを使う。timeInputや内部モデルは精度を維持する。編集時はlib/record-editor.tsのeditedTime/editedMinutesで、表示値が変わらなければ元の値を保存する。時間を各記録で丸めてから集計しない。週タイムラインの目盛りは専用のグリッド行とし、絶対配置する目盛りのtopを明示して次の日付行へ侵入させない。

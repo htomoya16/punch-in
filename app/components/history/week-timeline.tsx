@@ -2,20 +2,20 @@
 import {memo,useEffect,useLayoutEffect,useMemo,useRef,useState,type CSSProperties} from 'react';
 import {Minus,Plus} from 'lucide-react';
 import type {Category,Session} from '../../../lib/model';
-import {clock,dayStartLabel,hms,readableDate} from '../../../lib/time';
+import {clock,dayStartLabel,hm,readableDate} from '../../../lib/time';
 import {buildWeekTimeline,weekDayTotal,type WeekTimelineDay} from '../../../lib/week-timeline';
 type Props={anchor:string;categoryFilter:string;activeDay:string;sessions:Session[];categories:Category[];dayStart:number;timezone:string;now:number;onDay(day:string):void;onEdit(session:Session):void};
 type DayProps={day:WeekTimelineDay;active:boolean;now:number;categoryMap:ReadonlyMap<string,Category>;timezone:string;onDay:Props['onDay'];onEdit:Props['onEdit']};
 const ZOOMS=[1,2,3,4,6,8,12,24];
 const DayRow=memo(function DayRow({day,active,now,categoryMap,timezone,onDay,onEdit}:DayProps){
-  const candidates=day.segments.filter(p=>p.start<now),visible=candidates.filter(p=>p.lane<3).slice(0,160),extra=candidates.length-visible.length,total=hms(weekDayTotal(day,now));
+  const candidates=day.segments.filter(p=>p.start<now),visible=candidates.filter(p=>p.lane<3).slice(0,160),extra=candidates.length-visible.length,total=hm(weekDayTotal(day,now));
   return <div className={`week-timeline-day ${active?'is-current':''}`} data-timeline-day={day.day} style={{'--lanes':Math.max(1,...visible.map(p=>p.lane+1))} as CSSProperties}>
     <button className="week-timeline-date" aria-label={`${day.day}の履歴へ移動`} aria-current={active?'date':undefined} title={`${clock(day.start,timezone)} — 翌${clock(day.end,timezone)}`} onClick={()=>onDay(day.day)}>{readableDate(day.day).replace('月','/').replace('日','')}</button>
     <div className="week-timeline-track">{visible.map(p=>{
       const category=categoryMap.get(p.categoryId),finish=Math.min(p.end,now),left=(p.start-day.start)/(day.end-day.start),width=Math.max(0,(finish-p.start)/(day.end-day.start)),label=`${category?.name??'削除済み'} ${clock(p.start,timezone)} — ${p.running&&now<day.end?'計測中':clock(finish,timezone)}`;
       return <button key={p.key} className={`week-timeline-bar ${p.running&&now<day.end?'is-running':''}`} style={{left:`${left*100}%`,width:`max(5px,${width*100}%)`,maxWidth:`${100-left*100}%`,top:9+p.lane*14,background:category?.color??'#64748b'}} title={label} aria-label={label} onClick={()=>onEdit(p.session)}/>;
     })}{extra>0&&<button className="week-timeline-more" aria-label={`${day.day}の全記録を見る`} title={`ほか${extra}区間`} onClick={()=>onDay(day.day)}>+{extra}</button>}</div>
-    <span className="week-timeline-total" title={`この日の時間軸に含まれる記録時間 ${total}`}>{total.slice(0,-3)}</span>
+    <span className="week-timeline-total" title={`この日の時間軸に含まれる記録時間 ${total}`}>{total}</span>
   </div>;
 });
 export default memo(function WeekTimeline({anchor,categoryFilter,activeDay,sessions,categories,dayStart,timezone,now,onDay,onEdit}:Props){
@@ -34,7 +34,7 @@ export default memo(function WeekTimeline({anchor,categoryFilter,activeDay,sessi
   function changeZoom(value:number){autoZoom.current=false;setZoom(value);}
   return <section className="week-timeline" aria-label="1週間のタイムライン"><div className="timeline-controls" role="group" aria-label="タイムラインの表示"><button className="icon-button" aria-label="タイムラインを縮小" disabled={index===0} onClick={()=>changeZoom(ZOOMS[index-1])}><Minus size={16}/></button><button className="icon-button" aria-label="タイムラインを拡大" disabled={index===ZOOMS.length-1} onClick={()=>changeZoom(ZOOMS[index+1])}><Plus size={16}/></button><button className="subtle-button" aria-pressed={zoom===1} onClick={()=>changeZoom(1)}>全体</button></div>
     <div className="week-timeline-scroll" ref={scroll} onScroll={e=>{const g=geometry.current;if(g)centerRatio.current=(e.currentTarget.scrollLeft+g.window/2)/g.track;}} tabIndex={0} role="region" aria-label="左右にスクロールして時間帯を移動" onKeyDown={e=>{if(e.target!==e.currentTarget)return;if(e.key==='Home'||e.key==='End'){e.preventDefault();e.currentTarget.scrollLeft=e.key==='Home'?0:e.currentTarget.scrollWidth;}}}>
-      <div className="week-timeline-grid" style={{width:Math.max(width,gridWidth)}}><div className="week-timeline-axis" aria-hidden="true"><span/>{ticks.map(hour=><span key={hour} style={{'--tick':hour/24} as CSSProperties}>{hour===24?'翌':''}{dayStartLabel((dayStart+hour*60)%1440)}</span>)}</div>
+      <div className="week-timeline-grid" style={{width:Math.max(width,gridWidth)}}><div className="week-timeline-axis" aria-hidden="true"><span className="week-axis-date"/><div className="week-timeline-scale">{ticks.map(hour=><span key={hour} style={{left:`${hour/24*100}%`}}>{hour===24?'翌':''}{dayStartLabel((dayStart+hour*60)%1440)}</span>)}</div><span className="week-axis-total"/></div>
         {days.map(day=>{const dayClock=now<day.start?day.start:!day.intervals.some(i=>i.end===null||i.end>now)?day.end:Math.min(now,day.end);return <DayRow key={day.day} day={day} active={day.day===activeDay} now={dayClock} categoryMap={categoryMap} timezone={timezone} onDay={onDay} onEdit={onEdit}/>;})}
       </div>
     </div>

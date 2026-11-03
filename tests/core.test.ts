@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { businessDay, fromTimeInput, hms, periodRange, shiftPeriod, timeInput, duration, contrastText, readableColor } from '../lib/time';
+import { businessDay, fromTimeInput, hms, hm, durationLabel, minuteInput, minuteIso, periodRange, shiftPeriod, timeInput, duration, contrastText, readableColor } from '../lib/time';
 import { assertNoOverlap, planImport } from '../lib/records';
 import { backupSchema } from '../lib/validation';
 import type { AppState, Backup, Session } from '../lib/model';
@@ -28,3 +28,6 @@ test('バージョン不一致と計測の重複は取り込まない',()=>{asse
 test('背景の明るさに合わせて文字色を選ぶ',()=>{assert.equal(contrastText('#ffffff'),'#182631');assert.equal(contrastText('#000000'),'#ffffff');});
 
 test('白い設定色でも文字と枠線が白い背景に埋もれない',()=>{assert.notEqual(readableColor('#ffffff'),'#ffffff');assert.equal(readableColor('#000000'),'#000000');});
+
+test('分表示は合算後に端数を除き、24時間を超えても時を維持する',()=>{assert.equal(hm(40000+40000+40000),'00:02');assert.equal(hm(90061000),'25:01');assert.equal(durationLabel(40000),'1分未満');assert.equal(durationLabel(9000000),'2時間30分');assert.equal(durationLabel(3600000),'1時間');assert.equal(durationLabel(0),'0分');});
+test('表示とCSVの日時だけ分単位にし、入力元の時刻は変えない',()=>{const at=Date.parse('2026-11-04T12:34:56.789+09:00');assert.equal(minuteInput(at,'Asia/Tokyo'),'2026-11-04T12:34');assert.equal(minuteIso(at),'2026-11-04T03:34Z');assert.equal(new Date(at).toISOString(),'2026-11-04T03:34:56.789Z');});

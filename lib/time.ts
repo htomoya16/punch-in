@@ -38,6 +38,11 @@ export function shiftPeriod(period: Period, anchor: string, direction: number) {
 }
 export function duration(s: Session, now: number) { return realTime(s,now); }
 export function hms(ms: number) { const s = Math.floor(Math.max(0, ms) / 1000); return `${String(Math.floor(s/3600)).padStart(2,"0")}:${String(Math.floor(s/60)%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }
+/** Presentation only: aggregate precise durations before converting to minutes. */
+export function hm(ms: number) { const m=Math.floor(Math.max(0,ms)/60000);return `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`; }
+export function durationLabel(ms: number) { const m=Math.floor(Math.max(0,ms)/60000);return ms>0&&m===0?'1分未満':m<60?`${m}分`:`${Math.floor(m/60)}時間${m%60?`${m%60}分`:''}`; }
+export function minuteInput(ms:number,timezone:string){return timeInput(ms,timezone).slice(0,16);}
+export function minuteIso(ms:number){return new Date(ms).toISOString().slice(0,16)+'Z';}
 export function hoursMinutes(ms: number) { const m = Math.floor(Math.max(0,ms)/60000); return `${Math.floor(m/60)}時間${String(m%60).padStart(2,"0")}分`; }
 export function clock(ms: number, timezone: string, seconds = false) { const p = wallParts(ms,timezone); return `${String(p.hour).padStart(2,"0")}:${String(p.minute).padStart(2,"0")}${seconds ? `:${String(p.second).padStart(2,"0")}` : ""}`; }
 export function dayStartLabel(minutes: number) { return `${String(Math.floor(minutes/60)).padStart(2,"0")}:${String(minutes%60).padStart(2,"0")}`; }

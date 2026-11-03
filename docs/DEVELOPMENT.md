@@ -65,3 +65,6 @@ GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履
 `<type>: <変更の内容>`に揃えます。機能追加は`feat`、修正は`fix`、文書は`docs`、構造整理は`refactor`、テストは`test`を使い、何を変えたかを具体的に書きます。
 
 並行作業・テンプレートのAPIは、起動したローカルWorkerに対して`node tests/parallel-api-test.mjs`で検証できます。認証ヘッダーを含むテストなので本番では実行しません。
+
+
+再打刻と週タイムラインの回帰テストは`npm test`に含まれる。起動したローカルWorkerでは`TEST_BASE_URL=http://127.0.0.1:8791 node tests/work-entries-api-test.mjs`で、再打刻・個別メモ・終了時刻・配分・JSON復元・個別削除を確認できる。

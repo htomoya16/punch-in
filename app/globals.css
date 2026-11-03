@@ -334,3 +334,24 @@
 .stats-detail-table .is-today>th:first-child{font-weight:600;color:var(--accent-link)}
 @media(max-width:760px){.parallel-actions{gap:12px}.batch-button{min-height:44px;padding:10px 13px}.weekly-history .history-day>.history-day-heading{padding:11px 10px}}
 @media(prefers-reduced-motion:reduce){.batch-button{transition:none}.batch-button:active:not(:disabled){transform:none}}
+
+/* A compact seven-day overview remains visible while the records scroll. */
+.weekly-history .history-sticky{grid-template-rows:36px auto;gap:8px;padding:10px 0 8px}
+.week-timeline{grid-column:1/-1;--week-date-width:78px;--week-total-width:55px;min-width:0;font-variant-numeric:tabular-nums}
+.week-timeline-axis{height:22px;position:relative;margin-right:var(--week-total-width);color:#8a98a8;font-size:9px}
+.week-timeline-axis>span:not(:first-child){position:absolute;left:calc(var(--week-date-width) + (100% - var(--week-date-width)) * var(--tick));transform:translateX(-50%);white-space:nowrap}
+.week-timeline-axis>span:last-child{transform:translateX(-100%)}
+.week-timeline-day{display:grid;grid-template-columns:var(--week-date-width) minmax(0,1fr) var(--week-total-width);min-height:27px;align-items:center;background:#fff;transition:background-color 140ms ease}
+.week-timeline-day.is-current{background:color-mix(in srgb,var(--accent) 9%,white)}
+.week-timeline-date{align-self:stretch;text-align:left;padding:3px 7px;font-size:11px;white-space:nowrap;color:#62748b}
+.week-timeline-day.is-current .week-timeline-date{font-weight:600;color:var(--accent-link);box-shadow:inset 2px 0 var(--accent-link)}
+.week-timeline-date:hover{color:var(--accent-link);background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.week-timeline-track{position:relative;height:calc(var(--lanes) * 7px + 10px);min-width:0;background:repeating-linear-gradient(to right,#dce4eb80 0px,#dce4eb80 1px,transparent 1px,transparent 25%);border-bottom:1px solid #eaf0f4}
+.week-timeline-bar{position:absolute;height:5px;border-radius:1px;min-width:3px;border:0;transition:filter 120ms ease}
+.week-timeline-bar:hover,.week-timeline-bar:focus-visible{filter:brightness(.85);z-index:2;outline:2px solid var(--accent-link);outline-offset:2px}
+.week-timeline-bar::after{content:"";position:absolute;inset:-3px 0}
+.week-timeline-bar.is-running{box-shadow:1px 0 0 1px currentColor;color:var(--accent-link)}
+.week-timeline-total{font-size:10px;text-align:right;padding-right:6px;color:#728197}
+.week-timeline-more{position:absolute;right:0;top:0;bottom:0;min-width:26px;font-size:10px;color:var(--accent-link);background:#fffffff0}
+@media(max-width:760px){.weekly-history .history-sticky{grid-template-rows:30px auto;padding-top:8px;gap:5px}.week-timeline{--week-date-width:62px;--week-total-width:43px}.week-timeline-date{font-size:10px;padding:3px 5px}.week-timeline-total{font-size:9px;padding-right:3px}.week-timeline-axis{font-size:9px;height:19px}.week-timeline-axis>span:nth-child(3),.week-timeline-axis>span:nth-child(5){display:none}.week-timeline-day{min-height:25px}}
+@media(prefers-reduced-motion:reduce){.week-timeline-day,.week-timeline-bar{transition:none}}

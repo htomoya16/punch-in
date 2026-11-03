@@ -1,14 +1,14 @@
 import type {MemoWrite} from "./session-memo-server";
 export class MemoConflictError extends Error {constructor(public currentMemo:string){super("別の画面で更新されています");}}
 export type MemoSnapshot={memo:string;status:"saved"|"pending"|"saving"|"error"|"conflict";error?:string;conflict?:string};
-type MemoTarget={id:string;categoryId:string};
+type MemoTarget={id:string;categoryId:string;memberId?:string};
 type Entry={target?:MemoTarget;snapshot:MemoSnapshot;base:string;dirty:boolean;job?:MemoWrite;saving?:Promise<boolean>;timer?:ReturnType<typeof setTimeout>;draftTimer?:ReturnType<typeof setTimeout>};
 type StorageLike=Pick<Storage,"getItem"|"setItem"|"removeItem">;
 export class SessionMemosStore {
   private entries=new Map<string,Entry>();private editing=new Set<string>();private listeners=new Set<()=>void>();
   constructor(private scope:string,private write:(input:MemoWrite)=>Promise<{id:string;memo:string;memoRevision?:number}>,private saved:(id:string,memo:string,revision?:number)=>string|void,private storage?:StorageLike,private delay=800){}
   private key(id:string){return `punch-in:session-memo:${encodeURIComponent(this.scope)}:${encodeURIComponent(id)}`;}
-  private entry(id:string,memo="",target?:MemoTarget){let e=this.entries.get(id);if(e){if(target)e.target=target;return e;}e={target,snapshot:{memo,status:"saved"},base:memo,dirty:false};try{const d=JSON.parse(this.storage?.getItem(this.key(id))??"null");if(d&&typeof d.memo==="string"&&d.memo.length<=2000&&typeof d.base==="string"){e.snapshot={memo:d.memo,status:"pending"};e.base=d.base;e.dirty=true;if(d.job?.id===(target?.id??id)&&d.job?.categoryId===target?.categoryId&&typeof d.job.memo==="string"&&typeof d.job.expectedMemo==="string")e.job=d.job;}}catch{/* Browser drafts are optional. */}this.entries.set(id,e);return e;}
+  private entry(id:string,memo="",target?:MemoTarget){let e=this.entries.get(id);if(e){if(target)e.target=target;return e;}e={target,snapshot:{memo,status:"saved"},base:memo,dirty:false};try{const d=JSON.parse(this.storage?.getItem(this.key(id))??"null");if(d&&typeof d.memo==="string"&&d.memo.length<=2000&&typeof d.base==="string"){e.snapshot={memo:d.memo,status:"pending"};e.base=d.base;e.dirty=true;if(d.job?.id===(target?.id??id)&&d.job?.categoryId===target?.categoryId&&d.job?.memberId===target?.memberId&&typeof d.job.memo==="string"&&typeof d.job.expectedMemo==="string")e.job=d.job;}}catch{/* Browser drafts are optional. */}this.entries.set(id,e);return e;}
   setEditing(id:string,active:boolean){if(active)this.editing.add(id);else this.editing.delete(id);}
   isEditing(id:string){return this.editing.has(id);}
   getSnapshot=(id:string,memo="",target?:MemoTarget)=>this.entry(id,memo,target).snapshot;
@@ -19,7 +19,7 @@ export class SessionMemosStore {
   observe(id:string,memo:string,target?:MemoTarget){const e=this.entry(id,memo,target);if(!e.dirty&&!e.job&&e.base!==memo){e.base=memo;this.publish(e,{memo,status:"saved",error:undefined,conflict:undefined});}if(e.dirty&&e.snapshot.status==="pending")this.schedule(id,e);}
   edit(id:string,memo:string){if(memo.length>2000)return;const e=this.entry(id);e.dirty=memo!==e.base||!!e.job;this.publish(e,{memo,status:e.snapshot.conflict!==undefined?"conflict":e.dirty?"pending":"saved",error:undefined});clearTimeout(e.draftTimer);e.draftTimer=setTimeout(()=>this.persist(id,e),150);this.schedule(id,e);}
   async flush(id:string):Promise<boolean>{const e=this.entry(id);clearTimeout(e.timer);this.persist(id,e);if(e.saving){const ok=await e.saving;return ok&&e.dirty?this.flush(id):ok;}if(e.snapshot.conflict!==undefined)return false;if(!e.dirty&&!e.job)return true;
-    const job=e.job??{id:e.target?.id??id,...(e.target?{categoryId:e.target.categoryId}:{}),memo:e.snapshot.memo,expectedMemo:e.base};e.job=job;this.persist(id,e);this.publish(e,{status:"saving",error:undefined});
+    const job=e.job??{id:e.target?.id??id,...(e.target?{categoryId:e.target.categoryId,...(e.target.memberId?{memberId:e.target.memberId}:{})}:{}),memo:e.snapshot.memo,expectedMemo:e.base};e.job=job;this.persist(id,e);this.publish(e,{status:"saving",error:undefined});
     e.saving=(async()=>{try{const result=await this.write(job);e.base=result.memo;e.job=undefined;e.dirty=e.snapshot.memo!==result.memo;this.publish(e,{status:e.dirty?"pending":"saved",error:undefined});this.persist(id,e);const remote=this.saved(id,result.memo,result.memoRevision);if(!e.dirty&&typeof remote==="string"&&remote!==result.memo){e.base=remote;this.publish(e,{memo:remote});}return true;}catch(error){if(error instanceof MemoConflictError){e.job=undefined;this.publish(e,{status:"conflict",conflict:error.currentMemo,error:undefined});}else this.publish(e,{status:"error",error:error instanceof Error?error.message:"保存できませんでした"});this.persist(id,e);return false;}})().finally(()=>{e.saving=undefined;});
     const ok=await e.saving;return ok&&e.dirty?this.flush(id):ok;
   }

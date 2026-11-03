@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { HttpError } from "./errors";
-export const sessionMemoSchema = z.object({id:z.string().min(1).max(100),memo:z.string().max(2000),expectedMemo:z.string().max(2000),categoryId:z.string().min(1).max(100).optional()});
+export const sessionMemoSchema = z.object({id:z.string().min(1).max(100),memo:z.string().max(2000),expectedMemo:z.string().max(2000),categoryId:z.string().min(1).max(100).optional(),memberId:z.string().min(1).max(100).optional()});
 export type MemoWrite = z.infer<typeof sessionMemoSchema>;
 export async function writeSessionMemo(db:D1Database,user:string,input:MemoWrite) {
   if(input.categoryId){
+    const key=input.memberId??input.categoryId,selector="COALESCE(json_extract(value,'$.id'),json_extract(value,'$.categoryId'))=?";
     const result=await db.batch<Record<string,unknown>>([
-      db.prepare("UPDATE sessions SET work=json_set(work,'$.members['||(SELECT key FROM json_each(sessions.work,'$.members') WHERE json_extract(value,'$.categoryId')=?)||'].memo',?),memo=CASE WHEN category_id=? THEN ? ELSE memo END WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM json_each(sessions.work,'$.members') WHERE json_extract(value,'$.categoryId')=? AND json_extract(value,'$.memo')=?) AND EXISTS(SELECT 1 FROM json_each(sessions.work,'$.members') WHERE json_extract(value,'$.categoryId')=? AND json_extract(value,'$.memo')<>?) RETURNING id").bind(input.categoryId,input.memo,input.categoryId,input.memo,user,input.id,input.categoryId,input.expectedMemo,input.categoryId,input.memo),
+      db.prepare(`UPDATE sessions SET work=json_set(work,'$.members['||(SELECT key FROM json_each(sessions.work,'$.members') WHERE ${selector})||'].memo',?),memo=CASE WHEN COALESCE(json_extract(work,'$.members[0].id'),category_id)=? THEN ? ELSE memo END WHERE user_id=? AND id=? AND EXISTS(SELECT 1 FROM json_each(sessions.work,'$.members') WHERE ${selector} AND json_extract(value,'$.categoryId')=? AND json_extract(value,'$.memo')=?) AND EXISTS(SELECT 1 FROM json_each(sessions.work,'$.members') WHERE ${selector} AND json_extract(value,'$.memo')<>?) RETURNING id`).bind(key,input.memo,key,input.memo,user,input.id,key,input.categoryId,input.expectedMemo,key,input.memo),
       db.prepare("UPDATE preferences SET memo_revision=memo_revision+1 WHERE user_id=? AND changes()>0").bind(user),
-      db.prepare("SELECT json_extract(j.value,'$.memo') AS memo,p.memo_revision AS revision FROM sessions s JOIN preferences p ON s.user_id=p.user_id JOIN json_each(s.work,'$.members') j WHERE s.user_id=? AND s.id=? AND json_extract(j.value,'$.categoryId')=?").bind(user,input.id,input.categoryId)
+      db.prepare("SELECT json_extract(j.value,'$.memo') AS memo,p.memo_revision AS revision FROM sessions s JOIN preferences p ON s.user_id=p.user_id JOIN json_each(s.work,'$.members') j WHERE s.user_id=? AND s.id=? AND COALESCE(json_extract(j.value,'$.id'),json_extract(j.value,'$.categoryId'))=? AND json_extract(j.value,'$.categoryId')=?").bind(user,input.id,key,input.categoryId)
     ]);
     const current=result[2].results[0];if(!current)throw new HttpError(404,"作業が見つかりません。入力内容は下書きに残っています");
     if(current.memo!==input.memo)throw new HttpError(409,"別の画面でメモが更新されています",{currentMemo:current.memo});

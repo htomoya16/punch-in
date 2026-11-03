@@ -1,5 +1,5 @@
 import {sessionFromRow} from "./session-row";
-import {controlWork} from "./work";
+import {controlWork,currentMember} from "./work";
 import {workUpdate} from "./work-server";
 import { z } from "zod";
 import { HttpError } from "./errors";
@@ -33,8 +33,8 @@ export async function performPunch(d: D1Database, user: string, input: { payload
   const statements = [d.prepare("UPDATE preferences SET revision=revision+1,mutation_token=? WHERE user_id=? AND revision=?").bind(input.mutationId, user, input.expectedRevision)];
   const changed: Session[] = [];
   if(running&&(running.work||running.categoryId!==categoryId)){
-    const m=running.work?.members.find(m=>m.categoryId===categoryId);
-    const next=controlWork(running,m?.state==='active'?'finish':m?.state==='paused'?'resume':'join',categoryId,at);
+    const m=currentMember(running,categoryId);
+    const next=controlWork(running,m?.state==='active'?'finish':m?.state==='paused'?'resume':'join',categoryId,at,input.mutationId);
     statements.push(workUpdate(d,user,running,next,input.mutationId));changed.push(next);
   }else if(running){
     statements.push(d.prepare(`UPDATE sessions SET ended_at=?,updated_at=? WHERE user_id=? AND id=? AND ${guard}`).bind(at,at,user,running.id,user,input.mutationId));changed.push({...running,endedAt:at,updatedAt:at});

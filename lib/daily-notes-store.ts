@@ -101,6 +101,9 @@ export class DailyNotesStore {
   edit(day: string, markdown: string,document?:NoteDocument) {
     const entry = this.entry(day);
     if (markdown.length > MAX_NOTE_LENGTH) return;
+    // A restored legacy browser draft may not exist on the server yet. Save
+    // its exact source first so the subsequent rich save can retain it there.
+    if(document&&!entry.snapshot.document&&entry.dirty&&!entry.job&&!entry.snapshot.conflict){entry.job={day,markdown:entry.snapshot.markdown,expectedVersion:entry.snapshot.version,mutationId:crypto.randomUUID()};}
     entry.dirty = noteContentKey({markdown,document}) !== entry.base || !!entry.job;
     this.publish(entry, { markdown, document, status: entry.snapshot.conflict ? "conflict" : entry.dirty ? "pending" : "saved", error: undefined });
     clearTimeout(entry.draftTimer);

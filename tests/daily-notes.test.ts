@@ -73,3 +73,10 @@ test("v3で表・折りたたみ・原文を保持し、v2のMarkdownも引き�
   assert.deepEqual(planImport(state,backup).dailyNotes,[note]);assert.throws(()=>planImport(state,{...backup,dailyNotes:[{...note,document:{...document,version:99}}]}));
   assert.deepEqual(planImport(state,{...backup,version:2,dailyNotes:[{day,markdown:"旧形式",updatedAt:1}]}).dailyNotes,[{day,markdown:"旧形式",updatedAt:1}]);
 });
+
+test("未保存の旧ブラウザ下書きは原文を先に保存してからブロックへ移行する",async()=>{
+  const {sqlite,d}=database(),disk=memory(),raw="# 下書き\n\n本文  \n続き\n",document={format:"blocknote" as const,version:1 as const,blocks:[{id:"draft",type:"paragraph",props:{},content:[{type:"text",text:"本文と追加入力",styles:{}}],children:[]}]},writes:NoteWrite[]=[];
+  disk.setItem(`punch-in:daily-note:a:${day}`,JSON.stringify({markdown:raw,base:"",version:0}));
+  const store=new DailyNotesStore("a",{read:date=>readDailyNote(d,"a",date),write:input=>{writes.push(input);return writeDailyNote(d,"a",input);}},disk,60000);
+  try{await store.load(day);store.edit(day,"本文と追加入力\n",document);assert.equal(await store.flush(day),true);assert.equal(writes.length,2);assert.equal(writes[0].markdown,raw);assert.equal(writes[0].document,undefined);const saved=await readDailyNote(d,"a",day);assert.equal(saved.originalMarkdown,raw);assert.deepEqual(saved.document,document);}finally{store.dispose();sqlite.close();}
+});

@@ -80,7 +80,9 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
     "createdAt": 1793556000000,
     "updatedAt": 1793566800000
   }],
-  "dailyNotes": [{ "day": "2026-11-01", "markdown": "# 今日\n\n- 振り返り", "updatedAt": 1793566800000 }]
+  "dailyNotes": [{ "day": "2026-11-01", "markdown": "# 今日\n\n- 振り返り", "updatedAt": 1793566800000 }],
+  "templates": [],
+  "defaultTemplateId": null
 }
 ```
 
@@ -101,7 +103,7 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 
 ## 日別メモの移行
 
-v3ではdailyNotesに日付・Markdown・更新日時に加え、任意の`document`と`originalMarkdown`を含める。構造を保持する復元にはv3のJSONを使う。v2は従来のMarkdown形式として取り込み可能。ユーザーID、保存用mutationId、ローカル下書き、CASのversionは含めない。v1も受け付け、日別メモは変更しない。v2/v3は日付重複を拒否し、取り込み先に同じ日付がある場合は既存を優先してスキップする。取り込み中の自動保存とも競合時に上書きしない。上限20000日、全ファイル16MB。
+v3ではdailyNotesに日付・Markdown・更新日時に加え、任意の`document`と`originalMarkdown`を含める。構造を保持する復元にはv3/v4のJSONを使う。v2は従来のMarkdown形式として取り込み可能。ユーザーID、保存用mutationId、ローカル下書き、CASのversionは含めない。v1も受け付け、日別メモは変更しない。v2〜v4は日付重複を拒否し、取り込み先に同じ日付がある場合は既存を優先してスキップする。取り込み中の自動保存とも競合時に上書きしない。上限20000日、全ファイル16MB。
 
 ## PUT /api/session-memo
 

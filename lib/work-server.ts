@@ -3,7 +3,7 @@ import type {Session,PunchDelta} from './model';
 import {controlWork,removeWork,members,type WorkControl} from './work';
 import {sessionFromRow} from './session-row';
 import {HttpError} from './errors';
-export const workInput=z.object({id:z.string().min(1).max(100),control:z.enum(['join','pause','resume','finish','end','allocate','remove']),categoryId:z.string().min(1).max(100).optional(),mode:z.enum(['auto','ratio','manual']).optional(),values:z.record(z.string(),z.number().finite().min(0).max(315576000000)).optional()});
+export const workInput=z.object({id:z.string().min(1).max(100),control:z.enum(['join','pause','resume','finish','end','pauseAll','resumeAll','allocate','remove']),categoryId:z.string().min(1).max(100).optional(),mode:z.enum(['auto','ratio','manual']).optional(),values:z.record(z.string(),z.number().finite().min(0).max(315576000000)).optional()});
 /** Preserve separately saved memos in the same atomic structural update. Resolve old memo positions by category, including after individual deletion. */
 export function workUpdate(db:D1Database,user:string,old:Session,next:Session,token:string){
   let expression='json(?)';const args:(string|number|null)[]=[JSON.stringify(next.work)];

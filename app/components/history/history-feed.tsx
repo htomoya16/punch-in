@@ -1,12 +1,12 @@
 'use client';
-import {memo,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
+import {memo,useEffect,useLayoutEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {ChevronLeft,ChevronRight,Pencil} from 'lucide-react';
 import type {Category,Session} from '../../../lib/model';
 import {weekDays} from '../../../lib/history-week';
 import {duration,hms,readableDate,shiftDay} from '../../../lib/time';
 import HistoryTimeline from './history-timeline';
-type Props={sessions:Session[];categories:Category[];anchor:string;now:number;openedDay?:string;range?:[string,string];onToday():void;onActiveDay(day:string):void;onPage(day:string):void;openNotes(day:string):void;onEdit(s:Session):void;renderRecords(rows:Session[]):ReactNode};
-export default memo(function HistoryFeed({sessions,categories,anchor,now,openedDay,range,onToday,onActiveDay,onPage,openNotes,onEdit,renderRecords}:Props){
+type Props={sessions:Session[];categories:Category[];anchor:string;focusRequest:number;now:number;openedDay?:string;range?:[string,string];onToday():void;onActiveDay(day:string):void;onPage(day:string):void;openNotes(day:string):void;onEdit(s:Session):void;renderRecords(rows:Session[]):ReactNode};
+export default memo(function HistoryFeed({sessions,categories,anchor,focusRequest,now,openedDay,range,onToday,onActiveDay,onPage,openNotes,onEdit,renderRecords}:Props){
  const groups=useMemo(()=>weekDays(anchor,sessions),[anchor,sessions]),from=groups[0].day,to=groups[6].day;
  const [active,setActive]=useState(anchor),[rowLimits,setRowLimits]=useState<Record<string,number>>({}),[bottomSpace,setBottomSpace]=useState(24);
  const sticky=useRef<HTMLElement>(null),sections=useRef(new Map<string,HTMLElement>()),lock=useRef(0),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
@@ -14,7 +14,23 @@ export default memo(function HistoryFeed({sessions,categories,anchor,now,openedD
  const align=(day:string)=>{const section=sections.current.get(day),header=sticky.current;if(section&&header){const top=section.getBoundingClientRect().top+scrollY-(document.querySelector('.topbar')?.getBoundingClientRect().height??52)-header.getBoundingClientRect().height-8;window.scrollTo({top:Math.max(0,top),behavior:'instant' as ScrollBehavior});}};
  function selectDay(day:string){lock.current=performance.now()+600;setActive(day);openNotes(day);clearTimeout(timer.current);if(!matchMedia('(max-width:760px)').matches){requestAnimationFrame(()=>align(day));timer.current=setTimeout(()=>align(day),280);}}
  useEffect(()=>onActiveDay(active),[active,onActiveDay]);
- useEffect(()=>{setActive(anchor);setRowLimits({});lock.current=performance.now()+600;const frame=requestAnimationFrame(()=>requestAnimationFrame(()=>align(anchor)));return()=>{cancelAnimationFrame(frame);clearTimeout(timer.current);};},[anchor]);
+ // An explicit focus request also runs when opening the same date again.
+ useLayoutEffect(()=>{
+   setActive(anchor);setRowLimits({});lock.current=Infinity;
+   let frame=0,cancelled=false;
+   const place=()=>{if(!cancelled)align(anchor);};
+   const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(place);};
+   const cancel=()=>{cancelled=true;lock.current=0;clearTimeout(settle);cancelAnimationFrame(frame);observer.disconnect();};
+   const key=(event:KeyboardEvent)=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End','Tab'].includes(event.key))cancel();};
+   const observer=new ResizeObserver(schedule);
+   if(sticky.current)observer.observe(sticky.current);
+   const section=sections.current.get(anchor);if(section)observer.observe(section);
+   frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(place);});
+   // Finish after the existing panel/entrance transitions, then release scroll tracking.
+   const settle=setTimeout(()=>{place();observer.disconnect();frame=requestAnimationFrame(()=>{lock.current=0;});},350);
+   window.addEventListener('wheel',cancel,{passive:true});window.addEventListener('touchstart',cancel,{passive:true});window.addEventListener('pointerdown',cancel,{passive:true});window.addEventListener('keydown',key);
+   return()=>{cancel();clearTimeout(timer.current);window.removeEventListener('pointerdown',cancel);window.removeEventListener('wheel',cancel);window.removeEventListener('touchstart',cancel);window.removeEventListener('keydown',key);};
+ },[anchor,focusRequest]);
  useEffect(()=>{const last=sections.current.get(to);const measure=()=>{const footer=sticky.current?.parentElement?.querySelector('.history-week-footer')?.getBoundingClientRect().height??0,page=document.querySelector('.page-content'),padding=page?parseFloat(getComputedStyle(page).paddingBottom):0;setBottomSpace(Math.max(24,Math.ceil(innerHeight-footer-padding-(document.querySelector('.topbar')?.getBoundingClientRect().height??52)-(sticky.current?.getBoundingClientRect().height??180)-(last?.getBoundingClientRect().height??0)-8)));};const observer=new ResizeObserver(measure);if(last)observer.observe(last);if(sticky.current)observer.observe(sticky.current);window.addEventListener('resize',measure);measure();return()=>{observer.disconnect();window.removeEventListener('resize',measure);};},[to]);
  useEffect(()=>{let frame=0;const update=()=>{frame=0;if(performance.now()<lock.current)return;const threshold=(sticky.current?.getBoundingClientRect().bottom??0)+18;let day=groups[0].day;for(const group of groups){const el=sections.current.get(group.day);if(el&&el.getBoundingClientRect().top<=threshold)day=group.day;else break;}setActive(day);};const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};window.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);return()=>{window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);cancelAnimationFrame(frame);};},[groups]);
  const label=`${from.replaceAll('-','/')} — ${from.slice(0,4)===to.slice(0,4)?to.slice(5).replace('-','/'):to.replaceAll('-','/')}`;

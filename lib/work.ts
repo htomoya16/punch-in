@@ -1,7 +1,7 @@
 import type { Session } from './model';
 export type WorkMember = {categoryId:string;memo:string;state:'active'|'paused'|'finished';weight:number;manualMs?:number;startedAt?:number;endedAt?:number|null};
-export type WorkGroup = {version:1;mode:'auto'|'ratio'|'manual';members:WorkMember[];intervals:{start:number;end:number|null;categoryIds:string[]}[]};
-export type WorkControl = 'join'|'pause'|'resume'|'finish'|'end';
+export type WorkGroup = {version:1;mode:'auto'|'ratio'|'manual';batchPausedCategoryIds?:string[];members:WorkMember[];intervals:{start:number;end:number|null;categoryIds:string[]}[]};
+export type WorkControl = 'join'|'pause'|'resume'|'finish'|'end'|'pauseAll'|'resumeAll';
 export function members(s:Session):WorkMember[]{return s.work?.members??[{categoryId:s.categoryId,memo:s.memo,state:s.endedAt===null?'active':'finished',weight:1}];}
 export function includesCategory(s:Session,id:string){return members(s).some(m=>m.categoryId===id);}
 export function realTime(s:Session,now:number,category=""){return s.work?s.work.intervals.filter(i=>!category||i.categoryIds.includes(category)).reduce((n,i)=>n+Math.max(0,(i.end??now)-i.start),0):category&&s.categoryId!==category?0:Math.max(0,(s.endedAt??now)-s.startedAt);}
@@ -28,15 +28,32 @@ export function controlWork(s:Session,control:WorkControl,categoryId:string,now:
   const at=Math.max(now,s.startedAt,...w.intervals.map(i=>i.end??i.start));
   for(const m of w.members){const range=memberRange(s,m.categoryId);if(m.startedAt===undefined&&range.start!==null)m.startedAt=range.start;if(m.endedAt===undefined){if(m.state!=='finished')m.endedAt=null;else if(range.end!==null)m.endedAt=range.end;}}
   const member=w.members.find(m=>m.categoryId===categoryId);
-  if(control==='join'){
+  if(control==='pauseAll'){
+    const active=w.members.filter(m=>m.state==='active');
+    if(!active.length)throw new Error('計測中の作業がありません');
+    w.batchPausedCategoryIds=[...new Set([...(w.batchPausedCategoryIds??[]),...active.map(m=>m.categoryId)])];
+    active.forEach(m=>{m.state='paused';});
+  }else if(control==='resumeAll'){
+    const ids=new Set(w.batchPausedCategoryIds??[]);
+    if(!w.members.some(m=>ids.has(m.categoryId)&&m.state==='paused'))throw new Error('まとめて再開する作業がありません');
+    w.members.forEach(m=>{if(ids.has(m.categoryId)&&m.state==='paused')m.state='active';});
+    delete w.batchPausedCategoryIds;
+  }else if(control==='join'){
     if(member){if(member.state==='active')return s;member.state='active';member.startedAt??=at;member.endedAt=null;}
     else {if(w.members.length>=50)throw new Error('並行する作業は50種類までです');w.members.push({categoryId,memo:'',state:'active',weight:1,startedAt:at,endedAt:null});}
   }else if(control==='end'){w.members.forEach(m=>{if(m.state!=='finished')m.endedAt=at;m.state='finished';});}
   else {if(!member)throw new Error('作業が見つかりません');if(control==='pause'&&member.state!=='active')throw new Error('計測中の作業を選択してください');if(control==='resume'&&member.state!=='paused')throw new Error('一時停止中の作業を選択してください');member.state=control==='pause'?'paused':control==='resume'?'active':'finished';if(control==='finish')member.endedAt=at;}
+  pruneBatchPause(w);
   const open=w.intervals.find(i=>i.end===null);if(open){open.end=at;if(open.end===open.start)w.intervals=w.intervals.filter(i=>i!==open);}
   const active=w.members.filter(m=>m.state==='active').map(m=>m.categoryId);if(active.length)w.intervals.push({start:at,end:null,categoryIds:active});
   if(w.intervals.length>10000)throw new Error('この記録を終了して、新しい記録を開始してください');
   return {...s,work:w,endedAt:w.members.every(m=>m.state==='finished')?at:null,updatedAt:at};
+}
+/** Batch resume owns only still-paused members; individual operations take ownership back. */
+function pruneBatchPause(w:WorkGroup){
+  if(!w.batchPausedCategoryIds)return;
+  w.batchPausedCategoryIds=w.batchPausedCategoryIds.filter(id=>w.members.some(m=>m.categoryId===id&&m.state==='paused'));
+  if(!w.batchPausedCategoryIds.length)delete w.batchPausedCategoryIds;
 }
 export function memoKey(s:Session,categoryId:string){return s.work?`work:${JSON.stringify([s.id,categoryId])}`:s.id;}
 export function readMemo(s:Session,key:string){return key===s.id?s.memo:s.work?.members.find(m=>`work:${JSON.stringify([s.id,m.categoryId])}`===key)?.memo;}
@@ -57,7 +74,7 @@ export function memberRange(s:Session,categoryId:string){const m=members(s).find
 export function removeWork(s:Session,categoryId:string,at:number):Session{
  if(!s.work||s.work.members.length<2)throw new Error('最後の作業は記録全体の削除を使用してください');
  if(!s.work.members.some(m=>m.categoryId===categoryId))throw new Error('作業が見つかりません');
- const w=structuredClone(s.work);w.members=w.members.filter(m=>m.categoryId!==categoryId);
+ const w=structuredClone(s.work);w.members=w.members.filter(m=>m.categoryId!==categoryId);pruneBatchPause(w);
  w.intervals=w.intervals.map(i=>({...i,categoryIds:i.categoryIds.filter(id=>id!==categoryId)})).filter(i=>i.categoryIds.length);
  if(w.members.every(m=>m.weight===0))w.members.forEach(m=>m.weight=1);
  const finished=w.members.every(m=>m.state==='finished'),lastEnd=Math.max(s.startedAt,...w.members.map(m=>memberRange(s,m.categoryId).end??memberRange(s,m.categoryId).start??s.startedAt));

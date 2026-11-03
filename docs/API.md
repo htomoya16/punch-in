@@ -118,9 +118,9 @@ v3ではdailyNotesに日付・Markdown・更新日時に加え、任意の`docum
 
 ## 並行作業（v4）
 
-`POST /api/action`の`action: "work"`は`{id,control,categoryId?}`を受け付ける。controlは`join`・`pause`・`resume`・`finish`・`end`・`remove`。`remove`はcategoryIdの作業だけを削除し、最後の1作業はdeleteSessionで記録全体を削除する。終了後の配分は`{id,control:"allocate",mode:"auto"|"ratio"|"manual",values?:{[categoryId]:number}}`。manualの値は独立したミリ秒、ratioは非負の重み（合計は正）。共通の打刻時刻を変更しない。通常は`{punchDelta}`、直前の再試行は`{state}`を返す。
+`POST /api/action`の`action: "work"`は`{id,control,categoryId?}`を受け付ける。controlは`join`・`pause`・`resume`・`finish`・`end`・`pauseAll`・`resumeAll`・`remove`。`remove`はcategoryIdの作業だけを削除し、最後の1作業はdeleteSessionで記録全体を削除する。終了後の配分は`{id,control:"allocate",mode:"auto"|"ratio"|"manual",values?:{[categoryId]:number}}`。manualの値は独立したミリ秒、ratioは非負の重み（合計は正）。共通の打刻時刻を変更しない。通常は`{punchDelta}`、直前の再試行は`{state}`を返す。
 
-Sessionの任意フィールド`work`は`{version:1,mode,members,intervals}`。membersは`{categoryId,memo,state:"active"|"paused"|"finished",weight,manualMs?,startedAt?,endedAt?}`、intervalsは`{start,end:null|number,categoryIds:string[]}`。親記録は同時に1件、内部区間は重複せず、最大50作業・10000区間。存在しないworkは従来の100%単独記録として解釈する。
+Sessionの任意フィールド`work`は`{version:1,mode,members,intervals,batchPausedCategoryIds?}`。membersは`{categoryId,memo,state:"active"|"paused"|"finished",weight,manualMs?,startedAt?,endedAt?}`、intervalsは`{start,end:null|number,categoryIds:string[]}`。親記録は同時に1件、内部区間は重複せず、最大50作業・10000区間。存在しないworkは従来の100%単独記録として解釈する。
 
 `PUT /api/session-memo`は並行記録に`categoryId`を追加し、対象メモだけCASで保存する。親memoは先頭作業との互換ミラー。並行記録を旧session編集APIで上書きすることは拒否する。
 
@@ -134,4 +134,7 @@ Sessionの任意フィールド`work`は`{version:1,mode,members,intervals}`。m
 
 通常のpunchは、未計測の別カテゴリを並行追加し、計測中ならその作業を終了、一時停止中なら再開する。親記録がなければ新しく開始する。個別削除でも親IDと開始側の記録日を維持し、先頭カテゴリが変わったときはcategoryIdと互換memoを残る先頭作業に合わせる。作業別メモの書き込みはカテゴリIDで対象を原子的に解決する。
 
-作業別のstartedAt/endedAtは任意の追加情報なのでJSON v4のまま引き継げる。終了時刻は一時停止の終端と区別して保存する。旧データの個別時刻は参加区間から推定し、元データを書き換えない。履歴CSVの開始・終了も作業ごとの時刻を使い、集計CSVは合計と計上時間を別の行で出力する。
+作業別のstartedAt/endedAtは任意の追加情報なのでJSON v4のまま引き継げる。終了時刻は一時停止の終端と区別して保存する。旧データの個別時刻は参加区間から推定し、元データを書き換えない。履歴CSVの開始・終了も作業ごとの時刻を使い、集計CSVは作業ごとの計上時間と、その合計を「計上時間」行で出力する。実時間の合計行は含めない。
+
+
+`pauseAll`は計測中のメンバーを同一時刻で一時停止し、`batchPausedCategoryIds`へ対象IDを保持する。`resumeAll`はそのIDのうち一時停止中の作業だけ再開する。先に個別停止していた作業は含めない。任意フィールドのため、既存のJSON v4・work version 1と互換で、DBマイグレーションは不要。IDは重複なし・最大50件で、現在の一時停止中メンバーだけを受け付ける。個別再開・終了・削除と全体終了では対象を除去する。版番号、再試行トークン、押下時刻の補正、メモの原子的な保持は既存のwork操作と共通。

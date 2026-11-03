@@ -74,12 +74,19 @@ export class DailyNotesStore {
   async load(day: string): Promise<void> {
     const entry = this.entry(day);
     if (entry.loading) return entry.loading;
-    if (entry.snapshot.loaded&&this.editing.has(day)&&!entry.dirty)return;
+    if (entry.snapshot.loaded&&this.editing.has(day)&&!entry.dirty&&entry.snapshot.status!=="error")return;
     if (entry.saving || (entry.snapshot.loaded && (entry.dirty || entry.job || entry.snapshot.conflict))) return;
     entry.loading = (async () => {
       try {
         const remote = await this.transport.read(day, entry.snapshot.loaded ? entry.snapshot.version : undefined,!entry.dirty&&!entry.job);
-        if (!remote) return;
+        if (!remote) {
+          // A successful conditional read confirms the unchanged server copy,
+          // including after a transient read failure. Keep edits made in flight.
+          if (entry.snapshot.loaded && !entry.dirty && !entry.job && !entry.snapshot.conflict && entry.snapshot.status === "error") {
+            this.publish(entry, {status: "saved", error: undefined});
+          }
+          return;
+        }
         if (!entry.dirty && !entry.job && !this.editing.has(day)) {
           entry.base = noteSaveKey(remote);
           this.publish(entry, { ...remote, loaded: true, status: "saved", error: undefined, conflict: undefined });

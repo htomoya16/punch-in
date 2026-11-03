@@ -1,0 +1,48 @@
+import type { Session } from './model';
+export type WorkMember = {categoryId:string;memo:string;state:'active'|'paused'|'finished';weight:number;manualMs?:number};
+export type WorkGroup = {version:1;mode:'auto'|'ratio'|'manual';members:WorkMember[];intervals:{start:number;end:number|null;categoryIds:string[]}[]};
+export type WorkControl = 'join'|'pause'|'resume'|'finish'|'end';
+export function members(s:Session):WorkMember[]{return s.work?.members??[{categoryId:s.categoryId,memo:s.memo,state:s.endedAt===null?'active':'finished',weight:1}];}
+export function includesCategory(s:Session,id:string){return members(s).some(m=>m.categoryId===id);}
+export function realTime(s:Session,now:number,category=""){return s.work?s.work.intervals.filter(i=>!category||i.categoryIds.includes(category)).reduce((n,i)=>n+Math.max(0,(i.end??now)-i.start),0):category&&s.categoryId!==category?0:Math.max(0,(s.endedAt??now)-s.startedAt);}
+/** Credit only the overlapping portion equally; rounding remainder stays with the first member. */
+const completedAllocations=new WeakMap<Session,Map<string,number>>();
+export function allocations(s:Session,now:number):Map<string,number>{
+ if(s.endedAt!==null){let cached=completedAllocations.get(s);if(!cached){cached=computeAllocations(s,0);completedAllocations.set(s,cached);}return cached;}return computeAllocations(s,now);
+}
+function computeAllocations(s:Session,now:number):Map<string,number>{
+  if(!s.work)return new Map([[s.categoryId,realTime(s,now)]]);
+  const w=s.work,values=new Map(w.members.map(m=>[m.categoryId,0]));
+  if(w.mode==='manual')return new Map(w.members.map(m=>[m.categoryId,m.manualMs??0]));
+  if(w.mode==='ratio'){
+    const total=realTime(s,now),weight=w.members.reduce((n,m)=>n+m.weight,0);let used=0,cumulative=0;
+    w.members.forEach((m,i)=>{cumulative+=m.weight;const value=Math.floor(total*cumulative/weight)-used;values.set(m.categoryId,value);used+=value;});return values;
+  }
+  for(const i of w.intervals){const elapsed=Math.max(0,(i.end??now)-i.start),part=Math.floor(elapsed/i.categoryIds.length);i.categoryIds.forEach((id,index)=>values.set(id,(values.get(id)??0)+part+(index===0?elapsed-part*i.categoryIds.length:0)));}
+  return values;
+}
+export function creditedTime(s:Session,now:number,category=''){const values=allocations(s,now);return category?(values.get(category)??0):[...values.values()].reduce((a,b)=>a+b,0);}
+export function controlWork(s:Session,control:WorkControl,categoryId:string,now:number):Session{
+  if(s.endedAt!==null)throw new Error('終了した記録は操作できません');
+  const w:WorkGroup=s.work?structuredClone(s.work):{version:1,mode:'auto',members:members(s),intervals:[{start:s.startedAt,end:null,categoryIds:[s.categoryId]}]};
+  const at=Math.max(now,s.startedAt,...w.intervals.map(i=>i.end??i.start));
+  const member=w.members.find(m=>m.categoryId===categoryId);
+  if(control==='join'){
+    if(member){if(member.state==='active')return s;member.state='active';}
+    else {if(w.members.length>=50)throw new Error('並行する作業は50種類までです');w.members.push({categoryId,memo:'',state:'active',weight:1});}
+  }else if(control==='end'){w.members.forEach(m=>m.state='finished');}
+  else {if(!member)throw new Error('作業が見つかりません');if(control==='pause'&&member.state!=='active')throw new Error('計測中の作業を選択してください');if(control==='resume'&&member.state!=='paused')throw new Error('一時停止中の作業を選択してください');member.state=control==='pause'?'paused':control==='resume'?'active':'finished';}
+  const open=w.intervals.find(i=>i.end===null);if(open){open.end=at;if(open.end===open.start)w.intervals=w.intervals.filter(i=>i!==open);}
+  const active=w.members.filter(m=>m.state==='active').map(m=>m.categoryId);if(active.length)w.intervals.push({start:at,end:null,categoryIds:active});
+  if(w.intervals.length>10000)throw new Error('この記録を終了して、新しい記録を開始してください');
+  return {...s,work:w,endedAt:w.members.every(m=>m.state==='finished')?at:null,updatedAt:at};
+}
+export function memoKey(s:Session,categoryId:string){return s.work?`work:${JSON.stringify([s.id,categoryId])}`:s.id;}
+export function readMemo(s:Session,key:string){return key===s.id?s.memo:s.work?.members.find(m=>`work:${JSON.stringify([s.id,m.categoryId])}`===key)?.memo;}
+export function setMemo(s:Session,key:string,memo:string):Session{
+  if(!s.work)return key===s.id?{...s,memo}:s;
+  const member=s.work.members.find(m=>`work:${JSON.stringify([s.id,m.categoryId])}`===key||(key===s.id&&m.categoryId===s.categoryId));if(!member)return s;
+  return {...s,memo:member.categoryId===s.categoryId?memo:s.memo,work:{...s.work,members:s.work.members.map(m=>m===member?{...m,memo}:m)}};
+}
+export function preserveMemos(next:Session,old:Session){let result={...next,memo:old.memo};for(const m of members(old))result=setMemo(result,memoKey(result,m.categoryId),m.memo);return result;}
+export function participation(s:Session){return s.work?s.work.intervals.flatMap((i,index)=>i.categoryIds.map(categoryId=>({categoryId,start:i.start,end:i.end,index}))):[{categoryId:s.categoryId,start:s.startedAt,end:s.endedAt,index:0}];}

@@ -63,3 +63,5 @@ GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履
 ## コミットメッセージ
 
 `<type>: <変更の内容>`に揃えます。機能追加は`feat`、修正は`fix`、文書は`docs`、構造整理は`refactor`、テストは`test`を使い、何を変えたかを具体的に書きます。
+
+並行作業・テンプレートのAPIは、起動したローカルWorkerに対して`node tests/parallel-api-test.mjs`で検証できます。認証ヘッダーを含むテストなので本番では実行しません。

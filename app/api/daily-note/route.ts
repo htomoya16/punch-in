@@ -1,3 +1,4 @@
+import {initializeDailyNote} from "../../../lib/note-template-server";
 import { api, json, readJson, userId } from "../../../lib/api";
 import { getDatabase } from "../../../lib/database";
 import { readDailyNote, writeDailyNote,readDailyNoteIndex } from "../../../lib/daily-note-server";
@@ -20,3 +21,5 @@ export async function PUT(request: Request) {
     return json({ note: await writeDailyNote(getDatabase(), user, input) });
   });
 }
+
+export async function POST(request:Request){return api(async()=>{const user=await userId();const body=await readJson(request,1000) as {day:unknown};const day=noteDaySchema.parse(body.day);return json({note:await initializeDailyNote(getDatabase(),user,day)});});}

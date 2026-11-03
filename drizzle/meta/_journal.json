@@ -36,6 +36,20 @@
       "when": 1793691945349,
       "tag": "0004_careful_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793701405147,
+      "tag": "0005_strange_polaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793701513691,
+      "tag": "0006_steep_roulette",
+      "breakpoints": true
     }
   ]
 }

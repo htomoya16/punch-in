@@ -37,12 +37,12 @@ function TouchBlockHandle(){
   if(!active)return null;
   return <components.Generic.Menu.Root position="bottom" portalElement={portal}><components.Generic.Menu.Trigger><button type="button" className="touch-block-handle" style={{top:active.top}} aria-label="ブロックの種類を変更"><GripVertical size={18}/></button></components.Generic.Menu.Trigger><components.Generic.Menu.Dropdown className="bn-menu-dropdown"><BlockActions editor={editor} block={active.block}/></components.Generic.Menu.Dropdown></components.Generic.Menu.Root>;
 }
-export default memo(function BlockEditor({note,onChange,onFocusChange}:{note:NoteSnapshot;onChange(markdown:string,document:NoteDocument):void;onFocusChange(active:boolean):void}){
+export default memo(function BlockEditor({note,onChange,onFocusChange,label="日別メモ"}:{note:NoteSnapshot;label?:string;onChange(markdown:string,document:NoteDocument):void;onFocusChange(active:boolean):void}){
   const initial=useRef(note),changed=useRef(onChange);changed.current=onChange;
   const lastGood=useRef<PartialBlock[]>(note.document?.blocks as PartialBlock[]??[]);
   const syncing=useRef(false),last=useRef(noteContentKey(note)),[error,setError]=useState("");
-  const editor=useCreateBlockNote({dictionary:{...ja,placeholders:{...ja.placeholders,default:"メモを書く、または / で追加"}},initialContent:note.document?.blocks as PartialBlock[]|undefined});
-  useEffect(()=>{editor.domElement?.setAttribute("aria-label","日別メモ");},[editor]);
+  const editor=useCreateBlockNote({dictionary:{...ja,slash_menu:{...ja.slash_menu,heading:{...ja.slash_menu.heading,title:"見出し1"},heading_2:{...ja.slash_menu.heading_2,title:"見出し2"},heading_3:{...ja.slash_menu.heading_3,title:"見出し3"}},placeholders:{...ja.placeholders,default:"メモを書く、または / で追加"}},initialContent:note.document?.blocks as PartialBlock[]|undefined});
+  useEffect(()=>{editor.domElement?.setAttribute("aria-label",label);},[editor,label]);
   useEffect(()=>editor.onBeforeChange(({tr})=>{if(tr.doc.textContent.length>100000){setError("メモは10万文字以内にしてください");return false;}}),[editor]);
   useEffect(()=>{
     if(initial.current.document)return;
@@ -55,6 +55,7 @@ export default memo(function BlockEditor({note,onChange,onFocusChange}:{note:Not
   useEffect(()=>{const key=noteContentKey(note);if(key===last.current)return;last.current=key;syncing.current=true;try{const blocks=note.document?.blocks as PartialBlock[]|undefined;editor.replaceBlocks(editor.document,blocks??editor.tryParseMarkdownToBlocks(note.markdown));}finally{lastGood.current=JSON.parse(JSON.stringify(editor.document));syncing.current=false;}},[note.markdown,note.document,editor]);
   return <div className="block-note-shell" onFocusCapture={()=>onFocusChange(true)} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))onFocusChange(false);}} onKeyDownCapture={e=>{
     if(e.nativeEvent.isComposing)return;
+    if(e.key==="ArrowUp"&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.altKey){const cursor=editor.getTextCursorPosition(),first=editor.document[0];if(cursor.block.id===first.id&&["bulletListItem","numberedListItem","checkListItem"].includes(first.type)&&!inlineText(first.content)&&!editor.getSelection()){e.preventDefault();e.stopPropagation();const [paragraph]=editor.insertBlocks([{type:"paragraph"}],first,"before");editor.setTextCursorPosition(paragraph,"start");return;}}
     const modifiers=(e.ctrlKey&&e.shiftKey&&!e.altKey&&!e.metaKey)||(e.metaKey&&e.altKey&&!e.ctrlKey);
     const digit=/^Digit([0-8])$/.exec(e.code)?.[1]??(/^[0-8]$/.test(e.key)?e.key:undefined);
     if(modifiers&&digit!==undefined){e.preventDefault();e.stopPropagation();const choice=TYPES.find(c=>"key"in c&&c.key===Number(digit));if(choice){const selected=editor.getSelection()?.blocks??[editor.getTextCursorPosition().block];editor.transact(()=>selected.forEach(block=>changeBlock(editor,block as Block,choice)));}}

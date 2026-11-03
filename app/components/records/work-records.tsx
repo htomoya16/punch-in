@@ -1,0 +1,15 @@
+'use client';
+import {Pencil,Trash2} from 'lucide-react';
+import type {Category,Session} from '../../../lib/model';
+import {members,memoKey,allocations} from '../../../lib/work';
+import {clock,hms,duration,wallParts} from '../../../lib/time';
+import type {SessionMemosStore} from '../../../lib/session-memos-store';
+import MemoCell from './memo-cell';
+export default function WorkRecords({sessions,categories,now,store,pending,onEdit,onDelete}:{sessions:Session[];categories:Category[];now:number;store:SessionMemosStore;pending:boolean;onEdit(s:Session):void;onDelete(s:Session):void}){
+  return <div className="work-records">{sessions.map(s=>{const times=allocations(s,now),items=members(s),isPending=s.id.startsWith('pending:');return <article className="work-record" data-record-id={s.id} key={s.id}>
+    <header className="work-record-heading"><div className="work-record-names">{items.map(m=>{const c=categories.find(c=>c.id===m.categoryId);return <span className="category-name" key={m.categoryId}><span className="dot" style={{background:c?.color??'#64748b'}}/><span>{c?.name??'削除済み'}</span></span>;})}</div><div className="record-actions"><button className="icon-button" aria-label="記録を編集" disabled={pending||isPending} onClick={()=>onEdit(s)}><Pencil size={15}/></button><button className="icon-button danger" aria-label="記録を削除" disabled={pending||isPending} onClick={()=>onDelete(s)}><Trash2 size={15}/></button></div></header>
+    <div className="work-record-times"><div><span>開始</span><time>{clock(s.startedAt,s.timezone)}</time></div><span className="work-time-arrow" aria-hidden="true">→</span><div><span>終了</span><time>{s.endedAt===null?(s.work?.members.every(m=>m.state!=='active')?'一時停止':isPending?'保存中':'計測中'):<>{wallParts(s.startedAt,s.timezone).date!==wallParts(s.endedAt,s.timezone).date&&<small>翌日以降 </small>}{clock(s.endedAt,s.timezone)}</>}</time></div><div className="work-record-duration"><span>{s.work?'実時間':'時間'}</span><strong>{hms(duration(s,now))}</strong></div></div>
+    {items.map(m=><div className={`work-record-member ${s.work?'is-group':''}`} key={m.categoryId}>{s.work&&<div className="work-member-heading"><span>{categories.find(c=>c.id===m.categoryId)?.name??'削除済み'}</span><span className="tabular">{hms(times.get(m.categoryId)??0)}</span></div>}<MemoCell id={memoKey(s,m.categoryId)} target={s.work?{id:s.id,categoryId:m.categoryId}:undefined} value={m.memo} label={`${categories.find(c=>c.id===m.categoryId)?.name??'作業'} ${clock(s.startedAt,s.timezone)}のメモ`} store={store} disabled={isPending||pending}/></div>)}
+    {s.work&&<footer className="work-record-credit"><span>計上時間</span><strong>{hms([...times.values()].reduce((a,b)=>a+b,0))}</strong></footer>}
+  </article>;})}</div>;
+}

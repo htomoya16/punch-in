@@ -1,4 +1,4 @@
-# API / JSON移行形式 v3
+# API / JSON移行形式 v4
 
 認証はSitesのSign in with ChatGPTを使用する。全エンドポイントは認証必須。サーバーは信頼済みのリクエストヘッダーからユーザーIDを解決し、クライアントが送る所有者IDは使用しない。レスポンスはno-store。
 
@@ -54,7 +54,7 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 ```json
 {
   "format": "punch-in",
-  "version": 3,
+  "version": 4,
   "exportedAt": "2026-11-01T15:00:00.000Z",
   "preferences": {
     "timezone": "Asia/Tokyo",
@@ -113,3 +113,19 @@ v3ではdailyNotesに日付・Markdown・更新日時に加え、任意の`docum
 
 
 ブロックへの初回保存時に、DBの既存Markdownを`originalMarkdown`へ一度だけ保持する。以後の編集で原文を上書きしない。CASと同一操作の再試行では、Markdownと構造の両方を比較する。構造保存済みのメモを、`document`を送らない旧クライアントから上書きする操作は409で拒否する。表や折りたたみの内容はJSONで保持し、Markdown出力は可搬な表現への変換として扱う。
+
+## 並行作業（v4）
+
+`POST /api/action`の`action: "work"`は`{id,control,categoryId?}`を受け付ける。controlは`join`・`pause`・`resume`・`finish`・`end`。終了後の配分は`{id,control:"allocate",mode:"auto"|"ratio"|"manual",values?:{[categoryId]:number}}`。manualの値は独立したミリ秒、ratioは非負の重み（合計は正）。共通の打刻時刻を変更しない。通常は`{punchDelta}`、直前の再試行は`{state}`を返す。
+
+Sessionの任意フィールド`work`は`{version:1,mode,members,intervals}`。membersは`{categoryId,memo,state:"active"|"paused"|"finished",weight,manualMs?}`、intervalsは`{start,end:null|number,categoryIds:string[]}`。親記録は同時に1件、内部区間は重複せず、最大50作業・10000区間。存在しないworkは従来の100%単独記録として解釈する。
+
+`PUT /api/session-memo`は並行記録に`categoryId`を追加し、対象メモだけCASで保存する。親memoは先頭作業との互換ミラー。並行記録を旧session編集APIで上書きすることは拒否する。
+
+## テンプレート（v4）
+
+- `GET /api/note-templates` → `{templates:[{id,name,markdown,document,version,updatedAt}],defaultId,version}`。末尾versionはデフォルト選択の版。
+- `PUT /api/note-templates` → actionは`save`（id,name,markdown,document,expectedVersion,mutationId）、`delete`（id,expectedVersion,mutationId）、`default`（idまたはnull,expectedVersion,mutationId）。idとmutationIdはUUID。所有者ごとに最大100件。
+- `POST /api/daily-note` → `{day}`。未作成のときだけデフォルトを複製する。既存の本文・空にしたメモは変更しない。GETは作成しない。
+- DailyNoteとNoteWriteは任意の`template:{id,fingerprint}`を持つ。fingerprintはIDを除いたブロック構造のSHA-256（末尾追加後は空文字）。本文と同じCASで保存する。
+- JSON v4は`templates`（CASのversionを除く本体）と`defaultTemplateId`、`sessions.work`、`dailyNotes.template`を含む。旧v1〜v3も受け付ける。既存テンプレートIDは上書きせず、デフォルトは個人設定を取り込む場合だけ復元する。

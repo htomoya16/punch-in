@@ -12,7 +12,7 @@ export function assertNoOverlap(all: Session[]) {
     end = s.endedAt ?? Infinity;
   }
 }
-export function planImport(state: AppState, raw: unknown, existingNoteDays: ReadonlySet<string> = new Set()) {
+export function planImport(state: AppState, raw: unknown, existingNoteDays: ReadonlySet<string> = new Set(),existingTemplateIds:ReadonlySet<string>=new Set()) {
   const backup = backupSchema.parse(raw);
   const categories = backup.categories.filter(c=>!state.categories.some(x=>x.id===c.id));
   const sessions = backup.sessions.filter(s=>!state.sessions.some(x=>x.id===s.id));
@@ -20,5 +20,6 @@ export function planImport(state: AppState, raw: unknown, existingNoteDays: Read
   assertNoOverlap([...state.sessions,...sessions]);
   const notes = backup.version!==1 ? backup.dailyNotes : [];
   const dailyNotes = notes.filter(n=>!existingNoteDays.has(n.day));
-  return { backup, categories, sessions, dailyNotes, preview:{dailyNotes:dailyNotes.length,skippedDailyNotes:notes.length-dailyNotes.length,categories:categories.length,sessions:sessions.length,skippedCategories:backup.categories.length-categories.length,skippedSessions:backup.sessions.length-sessions.length,running:sessions.some(s=>s.endedAt===null)} };
+  const templates=backup.version===4?backup.templates.filter(t=>!existingTemplateIds.has(t.id)):[];
+  return { backup, categories, sessions, dailyNotes, templates, preview:{dailyNotes:dailyNotes.length,skippedDailyNotes:notes.length-dailyNotes.length,categories:categories.length,sessions:sessions.length,skippedCategories:backup.categories.length-categories.length,skippedSessions:backup.sessions.length-sessions.length,running:sessions.some(s=>s.endedAt===null)} };
 }

@@ -22,6 +22,7 @@ export const sessions = sqliteTable("sessions", {
   userId: text("user_id").notNull(), id: text("id").notNull(), categoryId: text("category_id").notNull(),
   startedAt: integer("started_at").notNull(), endedAt: integer("ended_at"), businessDay: text("business_day").notNull(),
   dayStart: integer("day_start").notNull(), timezone: text("timezone").notNull(), memo: text("memo").notNull().default(""),
+  work: text("work"),
   createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, t => [
   primaryKey({ columns: [t.userId, t.id] }), index("sessions_by_day").on(t.userId, t.businessDay),
@@ -36,7 +37,15 @@ export const dailyNotes = sqliteTable("daily_notes", {
   markdown: text("markdown").notNull().default(""),
   document: text("document"),
   originalMarkdown: text("original_markdown"),
+  template: text("template"),
   version: integer("version").notNull().default(1),
   mutationId: text("mutation_id").notNull().default(""),
   updatedAt: integer("updated_at").notNull(),
 }, t => [primaryKey({ columns: [t.userId, t.day] }), check("positive_note_version", sql`${t.version} >= 1`)]);
+
+export const noteTemplates=sqliteTable("note_templates",{
+  userId:text("user_id").notNull(),id:text("id").notNull(),name:text("name").notNull(),markdown:text("markdown").notNull(),document:text("document").notNull(),version:integer("version").notNull().default(1),mutationId:text("mutation_id").notNull(),createdAt:integer("created_at").notNull(),updatedAt:integer("updated_at").notNull(),
+},t=>[primaryKey({columns:[t.userId,t.id]})]);
+export const noteTemplatePreferences=sqliteTable("note_template_preferences",{
+ userId:text("user_id").primaryKey(),defaultId:text("default_id"),version:integer("version").notNull().default(1),mutationId:text("mutation_id").notNull(),
+});

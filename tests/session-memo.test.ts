@@ -39,3 +39,5 @@ test("履歴は日付降順、メモだけの日と件数の少ない日をま�
   assert.deepEqual(historyDays(sessions,["2026-10-31"],"2026-10-31","2026-11-02").map(g=>g.day),["2026-11-02","2026-11-01","2026-10-31"]);
   assert.deepEqual(historyDays(sessions,["2026-10-31"],"2026-11-02","2026-11-02",false).map(g=>g.day),["2026-11-02","2026-11-01","2026-10-30"]);
 });
+
+test('並行メモの下書き復元は区切り文字を含むIDも正しい対象へ送る',async()=>{const disk=storage(),target={id:'parent::one',categoryId:'category::two'},key='work:'+JSON.stringify([target.id,target.categoryId]);const first=new SessionMemosStore('scope',async()=>{throw new Error('offline');},()=>{},disk,60000);first.getSnapshot(key,'',target);first.edit(key,'draft');assert.equal(await first.flush(key),false);first.dispose();let written:MemoWrite|undefined;const second=new SessionMemosStore('scope',async input=>{written=input;return{id:input.id,memo:input.memo};},()=>{},disk,60000);try{second.getSnapshot(key,'',target);assert.equal(await second.flush(key),true);assert.equal(written?.id,target.id);assert.equal(written?.categoryId,target.categoryId);assert.equal(written?.memo,'draft');}finally{second.dispose();}});

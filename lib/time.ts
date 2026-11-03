@@ -1,3 +1,4 @@
+import {realTime} from "./work";
 import type { Session } from "./model";
 export type Period = "day" | "week" | "month" | "year" | "all";
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -35,7 +36,7 @@ export function shiftPeriod(period: Period, anchor: string, direction: number) {
   else d.setUTCDate(d.getUTCDate() + direction * (period === "week" ? 7 : 1));
   return d.toISOString().slice(0,10);
 }
-export function duration(s: Session, now: number) { return Math.max(0, (s.endedAt ?? now) - s.startedAt); }
+export function duration(s: Session, now: number) { return realTime(s,now); }
 export function hms(ms: number) { const s = Math.floor(Math.max(0, ms) / 1000); return `${String(Math.floor(s/3600)).padStart(2,"0")}:${String(Math.floor(s/60)%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }
 export function hoursMinutes(ms: number) { const m = Math.floor(Math.max(0,ms)/60000); return `${Math.floor(m/60)}時間${String(m%60).padStart(2,"0")}分`; }
 export function clock(ms: number, timezone: string, seconds = false) { const p = wallParts(ms,timezone); return `${String(p.hour).padStart(2,"0")}:${String(p.minute).padStart(2,"0")}${seconds ? `:${String(p.second).padStart(2,"0")}` : ""}`; }

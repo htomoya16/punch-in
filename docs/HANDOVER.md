@@ -106,3 +106,5 @@
 経過時間と集計の表示はapp/components/time/duration-value.tsxへ統一する。親の数字サイズを継承し、単位のみ小さくする。文字列が必要なCSV・aria-label・titleにはhoursMinutesを使う。時刻のclockと区別する。
 
 DurationValueは共通のhm関数でHH:mmへ整形する。開始・終了の範囲にはClock3を添える。タイムラインの目盛りには追加しない。
+
+打刻画面とサイドバーはDurationValueのsecondsを指定して秒表示にする。WorkRecordsも打刻画面でだけsecondsを有効にし、履歴・集計の初期値は分単位のまま。

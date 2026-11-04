@@ -1,5 +1,5 @@
-import {hm} from '../../../lib/time';
-/** Keep elapsed time in hours:minutes; the parent controls its visual emphasis. */
-export default function DurationValue({value}:{value:number}){
-  return <span className="duration-value">{hm(value)}</span>;
+import {hm,hms} from '../../../lib/time';
+/** Live clocks can show seconds while records and reports default to minutes. */
+export default function DurationValue({value,seconds=false}:{value:number;seconds?:boolean}){
+  return <span className="duration-value">{seconds?hms(value):hm(value)}</span>;
 }

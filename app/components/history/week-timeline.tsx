@@ -1,28 +1,29 @@
 'use client';
+import DurationValue from '../time/duration-value';
 import {memo,useEffect,useLayoutEffect,useMemo,useRef,useState,type CSSProperties} from 'react';
 import {Minus,Plus} from 'lucide-react';
 import type {Category,Session} from '../../../lib/model';
-import {clock,dayStartLabel,hm,readableDate} from '../../../lib/time';
+import {hoursMinutes,clock,dayStartLabel,readableDate} from '../../../lib/time';
 import {buildWeekTimeline,weekDayTotal,type WeekTimelineDay} from '../../../lib/week-timeline';
 type Props={anchor:string;categoryFilter:string;activeDay:string;sessions:Session[];categories:Category[];dayStart:number;timezone:string;now:number;onDay(day:string):void;onEdit(session:Session):void};
 type DayProps={day:WeekTimelineDay;active:boolean;now:number;categoryMap:ReadonlyMap<string,Category>;timezone:string;onDay:Props['onDay'];onEdit:Props['onEdit']};
 const ZOOMS=[1,2,3,4,6,8,12,24];
 const DayRow=memo(function DayRow({day,active,now,categoryMap,timezone,onDay,onEdit}:DayProps){
-  const candidates=day.segments.filter(p=>p.start<now),visible=candidates.filter(p=>p.lane<3).slice(0,160),extra=candidates.length-visible.length,total=hm(weekDayTotal(day,now));
+  const candidates=day.segments.filter(p=>p.start<now),visible=candidates.filter(p=>p.lane<3).slice(0,160),extra=candidates.length-visible.length,total=weekDayTotal(day,now);
   return <div className={`week-timeline-day ${active?'is-current':''}`} data-timeline-day={day.day} style={{'--lanes':Math.max(1,...visible.map(p=>p.lane+1))} as CSSProperties}>
     <button className="week-timeline-date" aria-label={`${day.day}の履歴へ移動`} aria-current={active?'date':undefined} title={`${clock(day.start,timezone)} — 翌${clock(day.end,timezone)}`} onClick={()=>onDay(day.day)}>{readableDate(day.day).replace('月','/').replace('日','')}</button>
     <div className="week-timeline-track">{visible.map(p=>{
       const category=categoryMap.get(p.categoryId),finish=Math.min(p.end,now),left=(p.start-day.start)/(day.end-day.start),width=Math.max(0,(finish-p.start)/(day.end-day.start)),label=`${category?.name??'削除済み'} ${clock(p.start,timezone)} — ${p.running&&now<day.end?'計測中':clock(finish,timezone)}`;
       return <button key={p.key} className={`week-timeline-bar ${p.running&&now<day.end?'is-running':''}`} style={{left:`${left*100}%`,width:`max(5px,${width*100}%)`,maxWidth:`${100-left*100}%`,top:9+p.lane*14,background:category?.color??'#64748b'}} title={label} aria-label={label} onClick={()=>onEdit(p.session)}/>;
     })}{extra>0&&<button className="week-timeline-more" aria-label={`${day.day}の全記録を見る`} title={`ほか${extra}区間`} onClick={()=>onDay(day.day)}>+{extra}</button>}</div>
-    <span className="week-timeline-total" title={`この日の時間軸に含まれる記録時間 ${total}`}>{total}</span>
+    <span className="week-timeline-total" title={`この日の時間軸に含まれる記録時間 ${hoursMinutes(total)}`}><DurationValue value={total}/></span>
   </div>;
 });
 export default memo(function WeekTimeline({anchor,categoryFilter,activeDay,sessions,categories,dayStart,timezone,now,onDay,onEdit}:Props){
   const days=useMemo(()=>buildWeekTimeline(anchor,sessions,dayStart,timezone,categoryFilter),[anchor,sessions,dayStart,timezone,categoryFilter]),categoryMap=useMemo(()=>new Map(categories.map(c=>[c.id,c])),[categories]);
-  const [zoom,setZoom]=useState(3),[width,setWidth]=useState(0),[sideWidths,setSideWidths]=useState(156);
+  const [zoom,setZoom]=useState(3),[width,setWidth]=useState(0),[sideWidths,setSideWidths]=useState(178);
   const scroll=useRef<HTMLDivElement>(null),geometry=useRef<{week:string;track:number;window:number}|null>(null),autoZoom=useRef(true),centerRatio=useRef<number|null>(null);
-  useEffect(()=>{const media=matchMedia('(max-width:760px)'),change=()=>{setSideWidths(media.matches?124:156);if(autoZoom.current)setZoom(media.matches?6:3);};change();media.addEventListener('change',change);return()=>media.removeEventListener('change',change);},[]);
+  useEffect(()=>{const media=matchMedia('(max-width:760px)'),change=()=>{setSideWidths(media.matches?150:178);if(autoZoom.current)setZoom(media.matches?6:3);};change();media.addEventListener('change',change);return()=>media.removeEventListener('change',change);},[]);
   useLayoutEffect(()=>{const el=scroll.current;if(!el)return;const measure=()=>setWidth(el.clientWidth),observer=new ResizeObserver(measure);observer.observe(el);measure();return()=>observer.disconnect();},[]);
   const windowWidth=Math.max(1,width-sideWidths),trackWidth=windowWidth*zoom,gridWidth=trackWidth+sideWidths,week=days[0].day;
   useLayoutEffect(()=>{const el=scroll.current;if(!el||!width)return;const old=geometry.current;let ratio:number;

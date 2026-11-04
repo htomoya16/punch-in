@@ -102,3 +102,5 @@
 
 
 分単位の表示はlib/time.tsのhm・durationLabel・minuteInput・minuteIsoを使う。timeInputや内部モデルは精度を維持する。編集時はlib/record-editor.tsのeditedTime/editedMinutesで、表示値が変わらなければ元の値を保存する。時間を各記録で丸めてから集計しない。週タイムラインの目盛りは専用のグリッド行とし、絶対配置する目盛りのtopを明示して次の日付行へ侵入させない。
+
+経過時間と集計の表示はapp/components/time/duration-value.tsxへ統一する。親の数字サイズを継承し、単位のみ小さくする。文字列が必要なCSV・aria-label・titleにはhoursMinutesを使う。時刻のclockと区別する。

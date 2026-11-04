@@ -467,14 +467,17 @@
 @container(max-width:450px){.record-list .record-member-heading{gap:8px}.record-list .record-member-time{font-size:17px}.record-list .record-member-period{font-size:13px;gap:5px}.record-member-period>.record-time-track{width:16px;flex-basis:16px}.record-list .record-total strong{font-size:21px}}
 @media(max-width:760px){.history-day-band .history-day-total,.today-records-total{font-size:24px}.today-records .section-heading>.text-button{font-size:11px}.record-list .record-member-name{font-size:14px}}
 
-/* Keep elapsed-time units subordinate to the digits at every display size. */
+/* Elapsed time stays compact while the surrounding layout sets its hierarchy. */
 .duration-value{display:inline-flex;align-items:baseline;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:normal;line-height:inherit}
-.duration-value>.duration-number{font-size:inherit;font-weight:inherit}
-.duration-value>.duration-unit{font-size:max(.58em,10px);font-weight:400;line-height:1;margin-inline:.12em .25em}
-.duration-value>.duration-unit:last-child{margin-right:0}
 .sidebar-total strong .duration-value{font-size:26px}
 .week-timeline{--week-total-width:90px}
 @media(max-width:760px){.week-timeline{--week-total-width:80px}}
 .chart-scale{width:82px;font-size:12px}
 @media(max-width:760px){.chart-scale{width:72px;font-size:11px}.sidebar-total strong .duration-value{font-size:26px}}
 .summary-prior{font-size:11px}
+
+.time-range-icon{flex-shrink:0;color:#8197a8;vertical-align:middle}
+.allocation-period>span,.allocation-member-period{display:flex;align-items:center;gap:6px}
+.record-interval>time:first-child{display:flex;align-items:center;gap:6px}
+.popover-records .popover-record-period{display:flex;align-items:flex-start;gap:6px}
+.popover-record-period>.time-range-icon{margin-top:2px}

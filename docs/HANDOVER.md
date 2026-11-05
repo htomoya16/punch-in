@@ -108,5 +108,3 @@
 DurationValueは共通のhm関数でHH:mmへ整形する。開始・終了の範囲にはClock3を添える。タイムラインの目盛りには追加しない。
 
 打刻画面とサイドバーはDurationValueのsecondsを指定して秒表示にする。WorkRecordsも打刻画面でだけsecondsを有効にし、履歴・集計の初期値は分単位のまま。
-
-2026-11-06: lib/work.tsのpunchControlが作業ボタンのpause/finish/joinを決める。performPunchとprojectPunchで共用し、旧単独記録もcontrolWorkへ通す。通常の終了・再開ボタンはwork APIの明示的な操作を使う。旧形式からの変換前は未保存メモをflushし、DB書き込みでも最新の本文を原子的に引き継ぐ。

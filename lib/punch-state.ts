@@ -1,4 +1,4 @@
-import {controlWork,punchControl,preserveMemos,realTime} from "./work";
+import {controlWork,currentMember,preserveMemos,realTime} from "./work";
 import type { AppState, PendingPunch, PunchDelta, Session } from "./model";
 import { businessDay } from "./time";
 
@@ -11,9 +11,9 @@ function projectPunchUnchecked(state: AppState, pending: PendingPunch): AppState
   if(pending.workId&&pending.control){const current=state.sessions.find(s=>s.id===pending.workId);if(!current)return state;const changed=controlWork(current,pending.control,pending.categoryId,pending.at,pending.mutationId);return {...state,sessions:state.sessions.map(s=>s.id===changed.id?changed:s)};}
   const running = state.sessions.find(s => s.endedAt === null);
   const at = Math.max(pending.at, running?.startedAt ?? 0, state.sessions[0]?.endedAt ?? 0);
-  if(running){const changed=controlWork(running,punchControl(running,pending.categoryId),pending.categoryId,at,pending.mutationId);return {...state,sessions:state.sessions.map(s=>s.id===changed.id?changed:s)};}
-  const sessions = [...state.sessions];
-  sessions.unshift({
+  if(running&&(running.work||running.categoryId!==pending.categoryId)){const m=currentMember(running,pending.categoryId);const changed=controlWork(running,m?.state==='active'?"finish":m?.state==='paused'?"resume":"join",pending.categoryId,at,pending.mutationId);return {...state,sessions:state.sessions.map(s=>s.id===changed.id?changed:s)};}
+  const sessions = state.sessions.map(s => s.id === running?.id ? { ...s, endedAt: at, updatedAt: at } : s);
+  if (running?.categoryId !== pending.categoryId) sessions.unshift({
     id: `pending:${pending.mutationId}`, categoryId: pending.categoryId,
     startedAt: at, endedAt: null, businessDay: businessDay(at, state.preferences.dayStart, state.preferences.timezone),
     dayStart: state.preferences.dayStart, timezone: state.preferences.timezone, memo: "", createdAt: at, updatedAt: at,

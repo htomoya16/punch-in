@@ -3,17 +3,18 @@ import DurationValue from '../time/duration-value';
 import {useMemo,useState,type CSSProperties} from 'react';
 import {Clock3,ChevronRight,Pencil,Trash2} from 'lucide-react';
 import type {Category,Session} from '../../../lib/model';
-import {memberKey,members,memoKey,entryAllocations,memberRange,memberIntervals} from '../../../lib/work';
+import {memberKey,memoKey,entryAllocations,memberRange,memberIntervals} from '../../../lib/work';
 import {hoursMinutes,hms,clock,duration,minuteInput,wallParts} from '../../../lib/time';
 import type {SessionMemosStore} from '../../../lib/session-memos-store';
 import MemoCell from './memo-cell';
+import {chronologicalMembers} from '../../../lib/record-order';
 type Props={sessions:Session[];categories:Category[];now:number;store:SessionMemosStore;pending:boolean;showIntervals?:boolean;seconds?:boolean;onEdit(s:Session):void;onDelete(s:Session,memberId?:string):void};
 function endLabel(s:Session,seconds:boolean){return s.endedAt===null?(s.work?.members.every(m=>m.state!=='active')?'一時停止中':'計測中'):`${wallParts(s.startedAt,s.timezone).date!==wallParts(s.endedAt,s.timezone).date?'翌日以降 ':''}${clock(s.endedAt,s.timezone,seconds)}`;}
 export default function WorkRecords({sessions,categories,now,store,pending,showIntervals=false,seconds=false,onEdit,onDelete}:Props){
   const [limits,setLimits]=useState<Record<string,number>>({});
   const categoryMap=useMemo(()=>new Map(categories.map(c=>[c.id,c])),[categories]);
   return <div className="work-records record-list">{sessions.map(s=>{
-    const times=entryAllocations(s,now),items=members(s),isPending=s.id.startsWith('pending:'),real=duration(s,now);
+    const times=entryAllocations(s,now),items=chronologicalMembers(s),isPending=s.id.startsWith('pending:'),real=duration(s,now);
     const envelope=items.length>1||(times.get(memberKey(items[0]))??0)!==real;
     const actions=<div className="record-actions"><button className="icon-button" aria-label="記録を編集" disabled={pending||isPending} onClick={()=>onEdit(s)}><Pencil size={15}/></button><button className="icon-button danger" aria-label="記録を削除" disabled={pending||isPending} onClick={()=>onDelete(s)}><Trash2 size={15}/></button></div>;
     return <article className={`work-record ${envelope?'has-record-envelope':'is-single-record'}`} data-record-id={s.id} key={s.id}>

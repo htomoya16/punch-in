@@ -141,7 +141,7 @@
 .record-table-region{container:records / inline-size}
 .record-table .memo-cell{min-width:170px;max-width:340px;white-space:normal}
 .inline-memo{position:relative;min-width:0}
-.inline-memo textarea{display:block;width:100%;min-width:0;min-height:34px;max-height:160px;resize:none;border:0;border-bottom:1px solid #e4e9ee;border-radius:0;padding:7px 20px 7px 0;background:transparent;box-shadow:none;color:#42566b;font-size:12px;line-height:1.7;overflow-y:auto;transition:border-color 120ms ease,background-color 120ms ease}
+.inline-memo textarea{display:block;width:100%;min-width:0;min-height:34px;max-height:none;field-sizing:content;resize:none;border:0;border-bottom:1px solid #e4e9ee;border-radius:0;padding:7px 20px 7px 0;background:transparent;box-shadow:none;color:#42566b;font-size:12px;line-height:1.7;overflow-y:hidden;transition:border-color 120ms ease,background-color 120ms ease}
 .inline-memo textarea:hover{border-bottom-color:#c2cdd7}
 .inline-memo textarea:focus{border-bottom-color:var(--accent-link);background:#fafcfd;box-shadow:none}
 .inline-memo textarea::placeholder{color:#a9b2bc}
@@ -369,7 +369,7 @@
 .record-member-heading>.icon-button{margin-right:-6px}
 .record-member-period{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0 2px;color:#6a7c8f;font-size:16px}
 .record-member-period>span{font-size:11px;color:#9aa8b6}
-.record-list .record-member .inline-memo textarea{font-size:14px;line-height:1.75;padding:6px 0;color:#5b6f83;min-height:30px;max-height:240px;overflow-y:auto}
+.record-list .record-member .inline-memo textarea{font-size:14px;line-height:1.75;padding:6px 0;color:#5b6f83;min-height:30px;max-height:none;field-sizing:content;overflow-y:hidden}
 .record-list .record-member .inline-memo textarea:focus{padding:6px 8px;background:#ffffffb3}
 .record-intervals{margin-top:7px;border-top:1px solid color-mix(in srgb,var(--record-color) 12%,white);font-size:12px;color:#60758a}
 .record-intervals summary{display:flex;align-items:center;gap:7px;padding:10px 0;list-style:none;cursor:pointer;min-height:36px}

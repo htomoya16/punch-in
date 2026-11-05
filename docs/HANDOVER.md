@@ -108,3 +108,12 @@
 DurationValueは共通のhm関数でHH:mmへ整形する。開始・終了の範囲にはClock3を添える。タイムラインの目盛りには追加しない。
 
 打刻画面とサイドバーはDurationValueのsecondsを指定して秒表示にする。WorkRecordsも打刻画面でだけsecondsを有効にし、履歴・集計の初期値は分単位のまま。
+
+
+## 記録の表示順
+
+- `lib/record-order.ts`で直近5件の選択と並行作業の表示順を扱い、`lib/history-week.ts`で日ごとの記録を昇順にする。`work.members`の先頭は主作業と互換メモに関わるため、保存配列を並べ替えない。
+- メンバーの開始が省略された旧記録は`memberRange`の区間から推定し、不明なら末尾に置く。同時刻は元の相対順を保つ。
+- 作業順は不変のSessionごとにWeakMapで再利用する。メモや時刻の更新は新しいSessionを作り、`memberKey`で対象を特定する。
+
+作業メモは`MemoCell`で全文表示する。CSSの内容による高さ調整が使えないブラウザでは、本文とResizeObserverの横幅変化に追従する。フォーカス時の左右余白や日別メモの開閉でも折り返し分を表示する。

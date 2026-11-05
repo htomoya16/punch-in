@@ -8,7 +8,7 @@ let state=(await request('/api/state')).data,n=0;const check=label=>console.log(
 async function action(action,payload,extra={}){const r=await request('/api/action',{action,payload,expectedRevision:state.revision,mutationId:randomUUID(),responseMode:'delta',...extra});assert.equal(r.status,200,JSON.stringify(r.data));state=(await request('/api/state')).data;return r;}
 const b=randomUUID();await action('category',{id:b,name:'B',color:'#12a89a',hidden:false,archived:false,position:1});const at=state.serverNow;
 await action('punch',{categoryId:'punch'},{pressedAt:at-55000});const id=state.sessions[0].id;
-await action('punch',{categoryId:b},{pressedAt:at-50000});await action('punch',{categoryId:'punch'},{pressedAt:at-40000});await action('punch',{categoryId:'punch'},{pressedAt:at-30000});await action('work',{id,control:'end'},{pressedAt:at-10000});
+await action('punch',{categoryId:b},{pressedAt:at-50000});await action('punch',{categoryId:'punch'},{pressedAt:at-40000});await action('punch',{categoryId:'punch'},{pressedAt:at-35000});await action('punch',{categoryId:'punch'},{pressedAt:at-30000});await action('work',{id,control:'end'},{pressedAt:at-10000});
 let s=state.sessions[0],entry=s.work.members.at(-1),key=entry.id;
 const memoResponse=await fetch(base+'/api/session-memo',{method:'PUT',headers:headers(actor),body:JSON.stringify({id,categoryId:'punch',memberId:key,memo:'keep this memo',expectedMemo:''})});assert.equal(memoResponse.status,200);
 const sibling=s.work.members[0],token=randomUUID();const payload={id,control:'timing',memberId:key,startedAt:at-25000,endedAt:at-15000};

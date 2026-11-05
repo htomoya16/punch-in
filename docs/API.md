@@ -132,7 +132,7 @@ Sessionの任意フィールド`work`は`{version:1,mode,members,intervals,batch
 - DailyNoteとNoteWriteは任意の`template:{id,fingerprint}`を持つ。fingerprintはIDを除いたブロック構造のSHA-256（末尾追加後は空文字）。本文と同じCASで保存する。
 - JSON v4は`templates`（CASのversionを除く本体）と`defaultTemplateId`、`sessions.work`、`dailyNotes.template`を含む。旧v1〜v3も受け付ける。既存テンプレートIDは上書きせず、デフォルトは個人設定を取り込む場合だけ復元する。
 
-通常のpunchは、未計測の別カテゴリを並行追加し、計測中ならその作業を終了、一時停止中なら再開する。親記録がなければ新しく開始する。個別削除でも親IDと開始側の記録日を維持し、先頭カテゴリが変わったときはcategoryIdと互換memoを残る先頭作業に合わせる。作業別メモの書き込みはカテゴリIDで対象を原子的に解決する。
+通常のpunchは、未計測の別カテゴリを並行追加し、計測中ならその作業を一時停止、一時停止中なら終了する。再開はworkのresumeまたはresumeAllを使う。親記録がなければ新しく開始する。個別削除でも親IDと開始側の記録日を維持し、先頭カテゴリが変わったときはcategoryIdと互換memoを残る先頭作業に合わせる。作業別メモの書き込みはカテゴリIDで対象を原子的に解決する。
 
 作業別のstartedAt/endedAtは任意の追加情報なのでJSON v4のまま引き継げる。一時停止中に終了した場合の終了時刻は、最後の計測区間の終端とする。旧データの個別時刻は参加区間から推定し、元データを書き換えない。履歴CSVの開始・終了も作業ごとの時刻を使い、集計CSVは作業ごとの計上時間と、その合計を「作業時間」行で出力する。実時間の合計行は含めない。
 
@@ -160,3 +160,6 @@ Sessionの任意フィールド`work`は`{version:1,mode,members,intervals,batch
 ## 分単位のUI・CSVと保存精度
 
 UIの時刻・時間は分単位で表示するが、API・JSONバックアップの日時と配分は従来のミリ秒単位。DB構造・JSON v4も変更しない。CSVの「秒数」は「作業時間（分）」へ変更し、整数分を出力する。日時列はUTCの分単位表記とする。CSVは分析用であり、端数を含む完全な復元にはJSONを使う。
+
+
+作業ボタンのpunchは開始→一時停止→終了へ進む。単独の旧形式もpause時にwork形式へ変換する。通常の2回のDBバッチ、revisionとmutationIdの検証、押下時刻の補正を維持する。終了後の再試行は同じ結果を返し、新しい記録を開始しない。APIの入力形式とJSON v4は変更しない。

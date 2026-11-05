@@ -28,7 +28,7 @@ test('DBでもA1/A2のメモを原子的に保存・保持し、削除後も取�
     f.sqlite.exec("INSERT INTO preferences(user_id,seeded)VALUES('u',2);INSERT INTO categories(user_id,id,name,color)VALUES('u','a','A','#168ab5'),('u','b','B','#12a89a')");
     let revision=0;const first=await performPunch(f.db,'u',{payload:{categoryId:'a'},expectedRevision:revision++,mutationId:crypto.randomUUID()},start),id=first!.sessions[0].id;
     const punch=async(categoryId:string,at:number,mutationId=crypto.randomUUID())=>performPunch(f.db,'u',{payload:{categoryId},expectedRevision:revision++,mutationId},at);
-    await punch('b',start);await writeSessionMemo(f.db,'u',{id,categoryId:'a',memo:'first',expectedMemo:''});await punch('a',start+20*minute);const token=crypto.randomUUID();await punch('a',start+40*minute,token);
+    await punch('b',start);await writeSessionMemo(f.db,'u',{id,categoryId:'a',memo:'first',expectedMemo:''});await punch('a',start+20*minute);await punch('a',start+30*minute);const token=crypto.randomUUID();await punch('a',start+40*minute,token);
     await writeSessionMemo(f.db,'u',{id,categoryId:'a',memberId:token,memo:'second',expectedMemo:''});
     let batches=0;f.onBatch(()=>{if(++batches===2)f.sqlite.prepare("UPDATE sessions SET work=json_set(work,'$.members[0].memo','concurrent first','$.members[2].memo','concurrent second'),memo='concurrent first'").run();});
     await performWork(f.db,'u',{payload:{id,control:'end'},expectedRevision:revision++,mutationId:crypto.randomUUID()},start+60*minute);f.onBatch(()=>{});

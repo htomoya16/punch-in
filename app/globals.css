@@ -481,3 +481,4 @@
 .record-interval>time:first-child{display:flex;align-items:center;gap:6px}
 .popover-records .popover-record-period{display:flex;align-items:flex-start;gap:6px}
 .popover-record-period>.time-range-icon{margin-top:2px}
+.punch-button.paused .punch-action{position:static;opacity:1}

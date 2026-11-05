@@ -8,6 +8,8 @@ export type WorkControl = 'join'|'pause'|'resume'|'finish'|'end'|'pauseAll'|'res
 export function memberKey(m:WorkMember){return m.id??m.categoryId;}
 export function members(s:Session):WorkMember[]{return s.work?.members??[{categoryId:s.categoryId,memo:s.memo,state:s.endedAt===null?'active':'finished',weight:1}];}
 export function currentMember(s:Session,categoryId:string){return members(s).findLast(m=>m.categoryId===categoryId);}
+/** The work button pauses an active entry, then finishes a paused one. */
+export function punchControl(s:Session,categoryId:string):'pause'|'finish'|'join'{const state=currentMember(s,categoryId)?.state;return state==='active'?'pause':state==='paused'?'finish':'join';}
 export function includesCategory(s:Session,id:string){return members(s).some(m=>m.categoryId===id);}
 export function intervalMembers(i:WorkInterval){return i.memberIds??i.categoryIds;}
 export function realTime(s:Session,now:number,category=''){return s.work?s.work.intervals.filter(i=>!category||i.categoryIds.includes(category)).reduce((n,i)=>n+Math.max(0,(i.end??now)-i.start),0):category&&s.categoryId!==category?0:Math.max(0,(s.endedAt??now)-s.startedAt);}

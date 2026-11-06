@@ -1,16 +1,19 @@
-import {initializeDailyNote} from "../../../lib/note-template-server";
+import { initializeDailyNote } from "../../../lib/note-template-server";
 import { api, json, readJson, userId } from "../../../lib/api";
 import { getDatabase } from "../../../lib/database";
-import { readDailyNote, writeDailyNote,readDailyNoteIndex } from "../../../lib/daily-note-server";
+import { readDailyNote, writeDailyNote, readDailyNoteIndex } from "../../../lib/daily-note-server";
 import { noteDaySchema, noteWriteSchema } from "../../../lib/daily-note-validation";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return api(async () => {
-    const user = await userId(), url = new URL(request.url);
-    if(url.searchParams.get("days")==="1")return json({days:await readDailyNoteIndex(getDatabase(),user)});
+    const user = await userId(),
+      url = new URL(request.url);
+    if (url.searchParams.get("days") === "1")
+      return json({ days: await readDailyNoteIndex(getDatabase(), user) });
     const day = noteDaySchema.parse(url.searchParams.get("day"));
     const note = await readDailyNote(getDatabase(), user, day);
-    if (url.searchParams.get("version") === String(note.version)) return new Response(null, { status: 304, headers: { "Cache-Control": "no-store" } });
+    if (url.searchParams.get("version") === String(note.version))
+      return new Response(null, { status: 304, headers: { "Cache-Control": "no-store" } });
     return json({ note });
   });
 }
@@ -22,4 +25,11 @@ export async function PUT(request: Request) {
   });
 }
 
-export async function POST(request:Request){return api(async()=>{const user=await userId();const body=await readJson(request,1000) as {day:unknown};const day=noteDaySchema.parse(body.day);return json({note:await initializeDailyNote(getDatabase(),user,day)});});}
+export async function POST(request: Request) {
+  return api(async () => {
+    const user = await userId();
+    const body = (await readJson(request, 1000)) as { day: unknown };
+    const day = noteDaySchema.parse(body.day);
+    return json({ note: await initializeDailyNote(getDatabase(), user, day) });
+  });
+}

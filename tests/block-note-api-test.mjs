@@ -1,24 +1,152 @@
-import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
-const base=process.env.TEST_BASE_URL??'http://127.0.0.1:8787';if(!['127.0.0.1','localhost'].includes(new URL(base).hostname))throw Error('Local-only tests');
-const actor='blocks-api-'+randomUUID(),other='blocks-other-'+randomUUID(),day='2026-10-20';
-const headers=user=>({'oai-authenticated-user-id':user,'oai-authenticated-user-email':'qa@example.test','Content-Type':'application/json',Origin:base,Connection:'close'});
-async function req(path,user=actor,body,method=body?'PUT':'GET'){const r=await fetch(base+path,{method,headers:headers(user),body:body?JSON.stringify(body):undefined});return{status:r.status,data:r.status===304?null:await r.json()};}
-const job=(markdown,version,document)=>({day,markdown,expectedVersion:version,mutationId:randomUUID(),...(document?{document}:{})});
-const doc=checked=>({format:'blocknote',version:1,blocks:[{id:'toggle',type:'toggleListItem',props:{},content:[{type:'text',text:'折りたたみ',styles:{}}],children:[{id:'task',type:'checkListItem',props:{checked},content:[{type:'text',text:'項目',styles:{}}],children:[]}]},{id:'table',type:'table',props:{},content:{type:'tableContent',columnWidths:[null,null],rows:[{cells:[[{type:'text',text:'列A',styles:{}}],[{type:'text',text:'列B',styles:{}}]]}]},children:[]}]});
-let passed=0;const check=name=>console.log('ok',++passed,'-',name);
-await req('/api/state');await req('/api/state',other);
-let r=await req('/api/daily-note',actor,job('# 元のMarkdown\n',0));assert.equal(r.status,200);assert.equal(r.data.note.document,undefined);check('legacy Markdown remains unchanged');
-const first=job('折りたたみ\n\n| 列A | 列B |\n|---|---|\n',1,doc(false));r=await req('/api/daily-note',actor,first);assert.equal(r.status,200);assert.deepEqual(r.data.note.document,doc(false));assert.equal(r.data.note.originalMarkdown,'# 元のMarkdown\n');check('rich migration retains source and table/toggle JSON');
-assert.deepEqual((await req('/api/daily-note',actor,first)).data,r.data);check('same mutation is idempotent');
-assert.equal((await req('/api/daily-note',actor,job('old tab',2))).status,409);check('legacy editor cannot erase rich structure');
-const attempts=[job(first.markdown,2,doc(true)),job(first.markdown,2,{...doc(false),blocks:[...doc(false).blocks,{id:'new',type:'paragraph',props:{},content:[],children:[]}]})];
-const race=await Promise.all(attempts.map(j=>req('/api/daily-note',actor,j)));assert.deepEqual(race.map(x=>x.status).sort(),[200,409]);const current=(await req('/api/daily-note?day='+day)).data.note;assert.equal(current.version,3);check('structure-only concurrent edits use CAS');
-assert.equal((await req('/api/daily-note?day='+day,other)).data.note.document,undefined);assert.deepEqual((await req('/api/daily-note?days=1',other)).data.days,[]);assert.ok((await req('/api/daily-note?days=1')).data.days.includes(day));check('note-day index is owner scoped');
-const empty={...job(' \n\t',0),day:'2026-10-21'};assert.equal((await req('/api/daily-note',actor,empty)).status,200);assert.equal((await req('/api/daily-note?days=1')).data.days.includes(empty.day),false);check('cleared notes do not fill the history with empty days');
-for(const document of [{format:'blocknote',version:1,blocks:[{id:'bad',type:'unknown',content:[]}]},{format:'blocknote',version:1,blocks:[{id:'bad',type:'table',content:'bad'}]},{format:'blocknote',version:1,blocks:[{id:'bad',type:'paragraph',content:[{type:'link',href:'javascript:alert(1)',content:[]}]}]}])assert.equal((await req('/api/daily-note',actor,job('bad',3,document))).status,400);check('invalid structures and executable links rejected');
-const backup=(await req('/api/export')).data;assert.equal(backup.version,4);assert.deepEqual(backup.dailyNotes[0].document,current.document);assert.equal(backup.dailyNotes[0].originalMarkdown,'# 元のMarkdown\n');check('v4 export retains rich document and original');
-let otherState=(await req('/api/state',other)).data;
-r=await req('/api/action',other,{action:'import',payload:{backup,includePreferences:false},expectedRevision:otherState.revision,mutationId:randomUUID()},'POST');assert.equal(r.status,200);assert.deepEqual((await req('/api/daily-note?day='+day,other)).data.note.document,current.document);check('v3 import round trip preserves structure');
-assert.equal(JSON.stringify((await req('/api/state')).data).includes('blocknote'),false);check('punch state does not load daily note bodies');
-console.log('Block-note API checks passed:',passed);
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+const base = process.env.TEST_BASE_URL ?? "http://127.0.0.1:8787";
+if (!["127.0.0.1", "localhost"].includes(new URL(base).hostname)) throw Error("Local-only tests");
+const actor = "blocks-api-" + randomUUID(),
+  other = "blocks-other-" + randomUUID(),
+  day = "2026-10-20";
+const headers = (user) => ({
+  "oai-authenticated-user-id": user,
+  "oai-authenticated-user-email": "qa@example.test",
+  "Content-Type": "application/json",
+  Origin: base,
+  Connection: "close",
+});
+async function req(path, user = actor, body, method = body ? "PUT" : "GET") {
+  const r = await fetch(base + path, {
+    method,
+    headers: headers(user),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: r.status, data: r.status === 304 ? null : await r.json() };
+}
+const job = (markdown, version, document) => ({
+  day,
+  markdown,
+  expectedVersion: version,
+  mutationId: randomUUID(),
+  ...(document ? { document } : {}),
+});
+const doc = (checked) => ({
+  format: "blocknote",
+  version: 1,
+  blocks: [
+    {
+      id: "toggle",
+      type: "toggleListItem",
+      props: {},
+      content: [{ type: "text", text: "折りたたみ", styles: {} }],
+      children: [
+        {
+          id: "task",
+          type: "checkListItem",
+          props: { checked },
+          content: [{ type: "text", text: "項目", styles: {} }],
+          children: [],
+        },
+      ],
+    },
+    {
+      id: "table",
+      type: "table",
+      props: {},
+      content: {
+        type: "tableContent",
+        columnWidths: [null, null],
+        rows: [
+          {
+            cells: [
+              [{ type: "text", text: "列A", styles: {} }],
+              [{ type: "text", text: "列B", styles: {} }],
+            ],
+          },
+        ],
+      },
+      children: [],
+    },
+  ],
+});
+let passed = 0;
+const check = (name) => console.log("ok", ++passed, "-", name);
+await req("/api/state");
+await req("/api/state", other);
+let r = await req("/api/daily-note", actor, job("# 元のMarkdown\n", 0));
+assert.equal(r.status, 200);
+assert.equal(r.data.note.document, undefined);
+check("legacy Markdown remains unchanged");
+const first = job("折りたたみ\n\n| 列A | 列B |\n|---|---|\n", 1, doc(false));
+r = await req("/api/daily-note", actor, first);
+assert.equal(r.status, 200);
+assert.deepEqual(r.data.note.document, doc(false));
+assert.equal(r.data.note.originalMarkdown, "# 元のMarkdown\n");
+check("rich migration retains source and table/toggle JSON");
+assert.deepEqual((await req("/api/daily-note", actor, first)).data, r.data);
+check("same mutation is idempotent");
+assert.equal((await req("/api/daily-note", actor, job("old tab", 2))).status, 409);
+check("legacy editor cannot erase rich structure");
+const attempts = [
+  job(first.markdown, 2, doc(true)),
+  job(first.markdown, 2, {
+    ...doc(false),
+    blocks: [
+      ...doc(false).blocks,
+      { id: "new", type: "paragraph", props: {}, content: [], children: [] },
+    ],
+  }),
+];
+const race = await Promise.all(attempts.map((j) => req("/api/daily-note", actor, j)));
+assert.deepEqual(race.map((x) => x.status).sort(), [200, 409]);
+const current = (await req("/api/daily-note?day=" + day)).data.note;
+assert.equal(current.version, 3);
+check("structure-only concurrent edits use CAS");
+assert.equal((await req("/api/daily-note?day=" + day, other)).data.note.document, undefined);
+assert.deepEqual((await req("/api/daily-note?days=1", other)).data.days, []);
+assert.ok((await req("/api/daily-note?days=1")).data.days.includes(day));
+check("note-day index is owner scoped");
+const empty = { ...job(" \n\t", 0), day: "2026-10-21" };
+assert.equal((await req("/api/daily-note", actor, empty)).status, 200);
+assert.equal((await req("/api/daily-note?days=1")).data.days.includes(empty.day), false);
+check("cleared notes do not fill the history with empty days");
+for (const document of [
+  { format: "blocknote", version: 1, blocks: [{ id: "bad", type: "unknown", content: [] }] },
+  { format: "blocknote", version: 1, blocks: [{ id: "bad", type: "table", content: "bad" }] },
+  {
+    format: "blocknote",
+    version: 1,
+    blocks: [
+      {
+        id: "bad",
+        type: "paragraph",
+        content: [{ type: "link", href: "javascript:alert(1)", content: [] }],
+      },
+    ],
+  },
+])
+  assert.equal((await req("/api/daily-note", actor, job("bad", 3, document))).status, 400);
+check("invalid structures and executable links rejected");
+const backup = (await req("/api/export")).data;
+assert.equal(backup.version, 4);
+assert.deepEqual(backup.dailyNotes[0].document, current.document);
+assert.equal(backup.dailyNotes[0].originalMarkdown, "# 元のMarkdown\n");
+check("v4 export retains rich document and original");
+let otherState = (await req("/api/state", other)).data;
+r = await req(
+  "/api/action",
+  other,
+  {
+    action: "import",
+    payload: { backup, includePreferences: false },
+    expectedRevision: otherState.revision,
+    mutationId: randomUUID(),
+  },
+  "POST",
+);
+assert.equal(r.status, 200);
+assert.deepEqual(
+  (await req("/api/daily-note?day=" + day, other)).data.note.document,
+  current.document,
+);
+check("v3 import round trip preserves structure");
+assert.equal(JSON.stringify((await req("/api/state")).data).includes("blocknote"), false);
+check("punch state does not load daily note bodies");
+console.log("Block-note API checks passed:", passed);

@@ -1,20 +1,147 @@
-import test from 'node:test';import assert from 'node:assert/strict';
-import type {Session} from '../lib/model';
-import {controlWork,removeWork,allocations,realTime,memberKey,memberRange,memberIntervals,preserveMemos} from '../lib/work';
-import {weekDays} from '../lib/history-week';
-import {diagonalColors,elapsedColors} from '../lib/elapsed-style';
-const start=Date.parse('2026-11-02T01:00:00Z'),minute=60000;
-const base:Session={id:'one',categoryId:'a',memo:'A',startedAt:start,endedAt:null,businessDay:'2026-11-02',dayStart:300,timezone:'Asia/Tokyo',createdAt:start,updatedAt:start};
-function ended(){return controlWork(controlWork(base,'join','b',start),'end','',start+60*minute);}
-test('自動配分の片方を削除すると残る作業へ再配分し実時間を二重加算しない',()=>{const s=removeWork(ended(),'b',start+60*minute);assert.equal(allocations(s,0).get('a'),60*minute);assert.equal(realTime(s,0),60*minute);assert.equal(s.memo,'A');});
-test('手動配分の片方を削除しても残る指定時間は変更しない',()=>{const s=ended();s.work={...s.work!,mode:'manual',members:s.work!.members.map(m=>({...m,manualMs:30*minute}))};const result=removeWork(s,'b',start+60*minute);assert.equal(allocations(result,0).get('a'),30*minute);assert.equal(realTime(result,0),60*minute);});
-test('削除した作業だけの区間は実時間から取り除く',()=>{let s=controlWork(base,'join','b',start+20*minute);s=controlWork(s,'finish','a',start+40*minute);s=controlWork(s,'end','',start+60*minute);const result=removeWork(s,'b',start+60*minute);assert.equal(realTime(result,0),40*minute);assert.equal(allocations(result,0).get('a'),40*minute);assert.equal(memberRange(result,'a').end,start+40*minute);});
-test('最後に動いている作業の削除で残った終了済み記録を閉じる',()=>{let s=controlWork(base,'join','b',start);s=controlWork(s,'finish','a',start+20*minute);const result=removeWork(s,'b',start+60*minute);assert.equal(result.endedAt,start+20*minute);assert.equal(result.work!.intervals.some(i=>i.end===null),false);});
-test('終了後の再打刻は開始・終了と区間を別々に記録する',()=>{let s=controlWork(base,'join','b',start+10*minute);s=controlWork(s,'finish','b',start+20*minute);s=controlWork(s,'join','b',start+30*minute);s=controlWork(s,'end','',start+40*minute);assert.equal(memberRange(s,'b').start,start+10*minute);assert.equal(memberRange(s,'b').end,start+20*minute);assert.equal(memberIntervals(s,'b').length,1);const second=memberKey(s.work!.members[2]);assert.equal(memberRange(s,second).start,start+30*minute);assert.equal(memberRange(s,second).end,start+40*minute);assert.equal(memberIntervals(s,'a').length,1);});
-test('古い並行記録は既存の参加区間から時刻を復元し推定であることを示す',()=>{const s=ended();s.work={...s.work!,members:s.work!.members.map(({startedAt,endedAt,...m})=>m)};assert.equal(memberRange(s,'b').start,start);assert.equal(memberRange(s,'b').end,start+60*minute);assert.equal(memberRange(s,'b').inferredEnd,true);});
-test('削除の差分で消した先頭メモを残る作業へコピーしない',()=>{const s=ended(),next=removeWork(s,'a',start+60*minute);assert.equal(preserveMemos(next,s).memo,'');});
-test('週のページは記録のない日も含め月曜から日曜の7日で固定する',()=>{const days=weekDays('2026-11-03',[{...base,endedAt:start+minute}]);assert.deepEqual(days.map(d=>d.day),['2026-11-02','2026-11-03','2026-11-04','2026-11-05','2026-11-06','2026-11-07','2026-11-08']);assert.equal(days[0].sessions.length,1);assert.equal(days[1].sessions.length,0);});
-test('週のページは年越しとうるう日も7日で表示する',()=>{assert.equal(weekDays('2027-01-01',[])[0].day,'2026-12-28');assert.equal(weekDays('2028-02-29',[])[6].day,'2028-03-05');});
-test('斜めの色分けは均等で一時停止中の色を含めない',()=>{let s=controlWork(base,'join','b',start);const cats=[{id:'a',name:'A',color:'#168ab5',hidden:false,archived:false,position:0},{id:'b',name:'B',color:'#12a89a',hidden:false,archived:false,position:1}];const colors=elapsedColors(s,cats);assert.equal(colors.length,2);assert.match(diagonalColors(colors)!,/50%/);s=controlWork(s,'pause','a',start+minute);assert.equal(elapsedColors(s,cats).length,1);assert.equal(diagonalColors(elapsedColors(s,cats)),undefined);});
+import test from "node:test";
+import assert from "node:assert/strict";
+import type { Session } from "../lib/model";
+import {
+  controlWork,
+  removeWork,
+  allocations,
+  realTime,
+  memberKey,
+  memberRange,
+  memberIntervals,
+  preserveMemos,
+} from "../lib/work";
+import { weekDays } from "../lib/history-week";
+import { diagonalColors, elapsedColors } from "../lib/elapsed-style";
+const start = Date.parse("2026-11-02T01:00:00Z"),
+  minute = 60000;
+const base: Session = {
+  id: "one",
+  categoryId: "a",
+  memo: "A",
+  startedAt: start,
+  endedAt: null,
+  businessDay: "2026-11-02",
+  dayStart: 300,
+  timezone: "Asia/Tokyo",
+  createdAt: start,
+  updatedAt: start,
+};
+function ended() {
+  return controlWork(controlWork(base, "join", "b", start), "end", "", start + 60 * minute);
+}
+test("自動配分の片方を削除すると残る作業へ再配分し実時間を二重加算しない", () => {
+  const s = removeWork(ended(), "b", start + 60 * minute);
+  assert.equal(allocations(s, 0).get("a"), 60 * minute);
+  assert.equal(realTime(s, 0), 60 * minute);
+  assert.equal(s.memo, "A");
+});
+test("手動配分の片方を削除しても残る指定時間は変更しない", () => {
+  const s = ended();
+  s.work = {
+    ...s.work!,
+    mode: "manual",
+    members: s.work!.members.map((m) => ({ ...m, manualMs: 30 * minute })),
+  };
+  const result = removeWork(s, "b", start + 60 * minute);
+  assert.equal(allocations(result, 0).get("a"), 30 * minute);
+  assert.equal(realTime(result, 0), 60 * minute);
+});
+test("削除した作業だけの区間は実時間から取り除く", () => {
+  let s = controlWork(base, "join", "b", start + 20 * minute);
+  s = controlWork(s, "finish", "a", start + 40 * minute);
+  s = controlWork(s, "end", "", start + 60 * minute);
+  const result = removeWork(s, "b", start + 60 * minute);
+  assert.equal(realTime(result, 0), 40 * minute);
+  assert.equal(allocations(result, 0).get("a"), 40 * minute);
+  assert.equal(memberRange(result, "a").end, start + 40 * minute);
+});
+test("最後に動いている作業の削除で残った終了済み記録を閉じる", () => {
+  let s = controlWork(base, "join", "b", start);
+  s = controlWork(s, "finish", "a", start + 20 * minute);
+  const result = removeWork(s, "b", start + 60 * minute);
+  assert.equal(result.endedAt, start + 20 * minute);
+  assert.equal(
+    result.work!.intervals.some((i) => i.end === null),
+    false,
+  );
+});
+test("終了後の再打刻は開始・終了と区間を別々に記録する", () => {
+  let s = controlWork(base, "join", "b", start + 10 * minute);
+  s = controlWork(s, "finish", "b", start + 20 * minute);
+  s = controlWork(s, "join", "b", start + 30 * minute);
+  s = controlWork(s, "end", "", start + 40 * minute);
+  assert.equal(memberRange(s, "b").start, start + 10 * minute);
+  assert.equal(memberRange(s, "b").end, start + 20 * minute);
+  assert.equal(memberIntervals(s, "b").length, 1);
+  const second = memberKey(s.work!.members[2]);
+  assert.equal(memberRange(s, second).start, start + 30 * minute);
+  assert.equal(memberRange(s, second).end, start + 40 * minute);
+  assert.equal(memberIntervals(s, "a").length, 1);
+});
+test("古い並行記録は既存の参加区間から時刻を復元し推定であることを示す", () => {
+  const s = ended();
+  s.work = { ...s.work!, members: s.work!.members.map(({ startedAt, endedAt, ...m }) => m) };
+  assert.equal(memberRange(s, "b").start, start);
+  assert.equal(memberRange(s, "b").end, start + 60 * minute);
+  assert.equal(memberRange(s, "b").inferredEnd, true);
+});
+test("削除の差分で消した先頭メモを残る作業へコピーしない", () => {
+  const s = ended(),
+    next = removeWork(s, "a", start + 60 * minute);
+  assert.equal(preserveMemos(next, s).memo, "");
+});
+test("週のページは記録のない日も含め月曜から日曜の7日で固定する", () => {
+  const days = weekDays("2026-11-03", [{ ...base, endedAt: start + minute }]);
+  assert.deepEqual(
+    days.map((d) => d.day),
+    [
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-07",
+      "2026-11-08",
+    ],
+  );
+  assert.equal(days[0].sessions.length, 1);
+  assert.equal(days[1].sessions.length, 0);
+});
+test("週のページは年越しとうるう日も7日で表示する", () => {
+  assert.equal(weekDays("2027-01-01", [])[0].day, "2026-12-28");
+  assert.equal(weekDays("2028-02-29", [])[6].day, "2028-03-05");
+});
+test("斜めの色分けは均等で一時停止中の色を含めない", () => {
+  let s = controlWork(base, "join", "b", start);
+  const cats = [
+    { id: "a", name: "A", color: "#168ab5", hidden: false, archived: false, position: 0 },
+    { id: "b", name: "B", color: "#12a89a", hidden: false, archived: false, position: 1 },
+  ];
+  const colors = elapsedColors(s, cats);
+  assert.equal(colors.length, 2);
+  assert.match(diagonalColors(colors)!, /50%/);
+  s = controlWork(s, "pause", "a", start + minute);
+  assert.equal(elapsedColors(s, cats).length, 1);
+  assert.equal(diagonalColors(elapsedColors(s, cats)), undefined);
+});
 
-test('旧記録に参加区間も時刻もない作業には他の操作時刻を補わない',()=>{const s:Session={...base,work:{version:1,mode:'auto',members:[{categoryId:'a',memo:'A',state:'active',weight:1},{categoryId:'b',memo:'',state:'finished',weight:1}],intervals:[{start,end:null,categoryIds:['a']}]}};const next=controlWork(s,'pause','a',start+minute);assert.equal(memberRange(next,'b').start,null);assert.equal(memberRange(next,'b').end,null);assert.equal(next.work!.members[1].startedAt,undefined);assert.equal(next.work!.members[1].endedAt,undefined);});
+test("旧記録に参加区間も時刻もない作業には他の操作時刻を補わない", () => {
+  const s: Session = {
+    ...base,
+    work: {
+      version: 1,
+      mode: "auto",
+      members: [
+        { categoryId: "a", memo: "A", state: "active", weight: 1 },
+        { categoryId: "b", memo: "", state: "finished", weight: 1 },
+      ],
+      intervals: [{ start, end: null, categoryIds: ["a"] }],
+    },
+  };
+  const next = controlWork(s, "pause", "a", start + minute);
+  assert.equal(memberRange(next, "b").start, null);
+  assert.equal(memberRange(next, "b").end, null);
+  assert.equal(next.work!.members[1].startedAt, undefined);
+  assert.equal(next.work!.members[1].endedAt, undefined);
+});

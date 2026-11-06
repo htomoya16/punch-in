@@ -10,9 +10,13 @@ const LEGACY_DEFAULTS = [
 
 /** Run as one atomic batch. Only a pristine, unused legacy preset is replaced. */
 export function bootstrapQueries(user: string, token = crypto.randomUUID()): Query[] {
-  const migrated = "EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=? AND seeded=1)";
+  const migrated =
+    "EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=? AND seeded=1)";
   return [
-    { sql: "INSERT INTO preferences (user_id,sidebar) VALUES (?,'#000000') ON CONFLICT DO NOTHING", values: [user] },
+    {
+      sql: "INSERT INTO preferences (user_id,sidebar) VALUES (?,'#000000') ON CONFLICT DO NOTHING",
+      values: [user],
+    },
     ...DEFAULT_CATEGORIES.map((c, i) => ({
       sql: "INSERT INTO categories (user_id,id,name,color,position) SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND seeded=0) ON CONFLICT DO NOTHING",
       values: [user, c.id, c.name, c.color, i, user],
@@ -30,7 +34,10 @@ export function bootstrapQueries(user: string, token = crypto.randomUUID()): Que
           (${LEGACY_DEFAULTS.map(() => "(id=? AND name=? AND color=? AND position=?)").join(" OR ")}))=4`,
       values: [token, user, user, user, user, ...LEGACY_DEFAULTS.flat()],
     },
-    { sql: `DELETE FROM categories WHERE user_id=? AND id IN ('research','development','career','study') AND ${migrated}`, values: [user, user, token] },
+    {
+      sql: `DELETE FROM categories WHERE user_id=? AND id IN ('research','development','career','study') AND ${migrated}`,
+      values: [user, user, token],
+    },
     ...DEFAULT_CATEGORIES.map((c, i) => ({
       sql: `INSERT INTO categories (user_id,id,name,color,position) SELECT ?,?,?,?,? WHERE ${migrated}`,
       values: [user, c.id, c.name, c.color, i, user, token],

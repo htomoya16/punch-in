@@ -1,14 +1,75 @@
-import test from 'node:test';import assert from 'node:assert/strict';
-import {recordTimeForDay,replaceDatePart,editedTime,daysInMonth,editedMinutes} from '../lib/record-editor';
-import {businessDay,timeInput} from '../lib/time';
-const prefs={timezone:'Asia/Tokyo',dayStart:300};
-test('日付行から追加する記録は押した記録日と現在の時刻で初期化する',()=>{const now=Date.parse('2026-11-04T14:23:45+09:00'),stamp=recordTimeForDay('2026-10-30',now,prefs);assert.equal(timeInput(stamp,prefs.timezone),'2026-10-30T14:23:45');assert.equal(businessDay(stamp,prefs.dayStart,prefs.timezone),'2026-10-30');});
-test('午前5時区切りの深夜2時は指定日の翌暦日へ合わせる',()=>{const now=Date.parse('2026-11-04T02:23:45+09:00'),stamp=recordTimeForDay('2026-10-30',now,prefs);assert.equal(timeInput(stamp,prefs.timezone),'2026-10-31T02:23:45');assert.equal(businessDay(stamp,prefs.dayStart,prefs.timezone),'2026-10-30');});
-test('区切りぴったりとUTC・他のタイムゾーンにも対応する',()=>{const now=Date.parse('2026-11-04T05:00:00+09:00');assert.equal(timeInput(recordTimeForDay('2026-10-30',now,prefs),prefs.timezone),'2026-10-30T05:00:00');const p={timezone:'America/New_York',dayStart:0},stamp=recordTimeForDay('2026-10-30',now,p);assert.equal(timeInput(stamp,p.timezone),'2026-10-30T15:00:00');});
-test('初期時刻が夏時間の存在しない時刻に当たる場合は有効な時刻へ進める',()=>{const p={timezone:'America/New_York',dayStart:0},now=Date.parse('2026-03-07T07:30:00Z');assert.equal(timeInput(recordTimeForDay('2026-03-08',now,p),p.timezone),'2026-03-08T03:00:00');});
-test('月を変えると存在する最終日へ合わせ、うるう年を扱う',()=>{assert.equal(replaceDatePart('2026-01-31T12:34:56','month',2),'2026-02-28T12:34:56');assert.equal(replaceDatePart('2024-01-31T12:34:56','month',2),'2024-02-29T12:34:56');assert.equal(replaceDatePart('2024-02-29T12:34:56','year',2025),'2025-02-28T12:34:56');assert.equal(daysInMonth(2000,2),29);});
-test('ホイールは時・分・秒を独立して変更する',()=>{const value='2026-11-04T12:34:56';assert.equal(replaceDatePart(value,'hour',0),'2026-11-04T00:34:56');assert.equal(replaceDatePart(value,'minute',0),'2026-11-04T12:00:56');assert.equal(replaceDatePart(value,'second',0),'2026-11-04T12:34:00');});
-test('日時を変更しない保存は元のミリ秒を保持する',()=>{const original=Date.parse('2026-11-04T12:34:56.789+09:00');assert.equal(editedTime('2026-11-04T12:34:56',original,prefs.timezone),original);assert.equal(editedTime('2026-11-04T12:35:56',original,prefs.timezone),original+60000-789);});
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  recordTimeForDay,
+  replaceDatePart,
+  editedTime,
+  daysInMonth,
+  editedMinutes,
+} from "../lib/record-editor";
+import { businessDay, timeInput } from "../lib/time";
+const prefs = { timezone: "Asia/Tokyo", dayStart: 300 };
+test("日付行から追加する記録は押した記録日と現在の時刻で初期化する", () => {
+  const now = Date.parse("2026-11-04T14:23:45+09:00"),
+    stamp = recordTimeForDay("2026-10-30", now, prefs);
+  assert.equal(timeInput(stamp, prefs.timezone), "2026-10-30T14:23:45");
+  assert.equal(businessDay(stamp, prefs.dayStart, prefs.timezone), "2026-10-30");
+});
+test("午前5時区切りの深夜2時は指定日の翌暦日へ合わせる", () => {
+  const now = Date.parse("2026-11-04T02:23:45+09:00"),
+    stamp = recordTimeForDay("2026-10-30", now, prefs);
+  assert.equal(timeInput(stamp, prefs.timezone), "2026-10-31T02:23:45");
+  assert.equal(businessDay(stamp, prefs.dayStart, prefs.timezone), "2026-10-30");
+});
+test("区切りぴったりとUTC・他のタイムゾーンにも対応する", () => {
+  const now = Date.parse("2026-11-04T05:00:00+09:00");
+  assert.equal(
+    timeInput(recordTimeForDay("2026-10-30", now, prefs), prefs.timezone),
+    "2026-10-30T05:00:00",
+  );
+  const p = { timezone: "America/New_York", dayStart: 0 },
+    stamp = recordTimeForDay("2026-10-30", now, p);
+  assert.equal(timeInput(stamp, p.timezone), "2026-10-30T15:00:00");
+});
+test("初期時刻が夏時間の存在しない時刻に当たる場合は有効な時刻へ進める", () => {
+  const p = { timezone: "America/New_York", dayStart: 0 },
+    now = Date.parse("2026-03-07T07:30:00Z");
+  assert.equal(
+    timeInput(recordTimeForDay("2026-03-08", now, p), p.timezone),
+    "2026-03-08T03:00:00",
+  );
+});
+test("月を変えると存在する最終日へ合わせ、うるう年を扱う", () => {
+  assert.equal(replaceDatePart("2026-01-31T12:34:56", "month", 2), "2026-02-28T12:34:56");
+  assert.equal(replaceDatePart("2024-01-31T12:34:56", "month", 2), "2024-02-29T12:34:56");
+  assert.equal(replaceDatePart("2024-02-29T12:34:56", "year", 2025), "2025-02-28T12:34:56");
+  assert.equal(daysInMonth(2000, 2), 29);
+});
+test("ホイールは時・分・秒を独立して変更する", () => {
+  const value = "2026-11-04T12:34:56";
+  assert.equal(replaceDatePart(value, "hour", 0), "2026-11-04T00:34:56");
+  assert.equal(replaceDatePart(value, "minute", 0), "2026-11-04T12:00:56");
+  assert.equal(replaceDatePart(value, "second", 0), "2026-11-04T12:34:00");
+});
+test("日時を変更しない保存は元のミリ秒を保持する", () => {
+  const original = Date.parse("2026-11-04T12:34:56.789+09:00");
+  assert.equal(editedTime("2026-11-04T12:34:56", original, prefs.timezone), original);
+  assert.equal(editedTime("2026-11-04T12:35:56", original, prefs.timezone), original + 60000 - 789);
+});
 
-test('分単位の日時で未変更保存しても元の秒とミリ秒を保持する',()=>{const original=Date.parse('2026-11-04T12:34:56.789+09:00');assert.equal(editedTime('2026-11-04T12:34',original,prefs.timezone),original);assert.equal(editedTime('2026-11-04T12:35',original,prefs.timezone),Date.parse('2026-11-04T12:35:00+09:00'));assert.throws(()=>editedTime('',original,prefs.timezone),/日時/);});
-test('手動配分も見えている分を変えなければ精度を維持する',()=>{assert.equal(editedMinutes('1',90001),90001);assert.equal(editedMinutes('2',90001),120000);assert.equal(editedMinutes('3',null),180000);assert.throws(()=>editedMinutes('1.5',null),/整数/);assert.throws(()=>editedMinutes('-1',null),/整数/);});
+test("分単位の日時で未変更保存しても元の秒とミリ秒を保持する", () => {
+  const original = Date.parse("2026-11-04T12:34:56.789+09:00");
+  assert.equal(editedTime("2026-11-04T12:34", original, prefs.timezone), original);
+  assert.equal(
+    editedTime("2026-11-04T12:35", original, prefs.timezone),
+    Date.parse("2026-11-04T12:35:00+09:00"),
+  );
+  assert.throws(() => editedTime("", original, prefs.timezone), /日時/);
+});
+test("手動配分も見えている分を変えなければ精度を維持する", () => {
+  assert.equal(editedMinutes("1", 90001), 90001);
+  assert.equal(editedMinutes("2", 90001), 120000);
+  assert.equal(editedMinutes("3", null), 180000);
+  assert.throws(() => editedMinutes("1.5", null), /整数/);
+  assert.throws(() => editedMinutes("-1", null), /整数/);
+});

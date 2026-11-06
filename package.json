@@ -19,7 +19,9 @@
     "test:punch-api": "node tests/punch-api-test.mjs",
     "test:notes-api": "node tests/daily-note-api-test.mjs",
     "test:session-memo-api": "node tests/session-memo-api-test.mjs",
-    "test:blocks-api": "node tests/block-note-api-test.mjs"
+    "test:blocks-api": "node tests/block-note-api-test.mjs",
+    "format": "prettier --write app src tests db scripts/test.mjs scripts/check-architecture.mjs",
+    "format:check": "prettier --check app src tests db scripts/test.mjs scripts/check-architecture.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -72,7 +74,8 @@
     "typescript": "5.9.3",
     "vinext": "1.0.0-beta.5",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.92.0",
+    "prettier": "3.9.10"
   },
   "type": "module",
   "overrides": {

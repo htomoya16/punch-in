@@ -1,13 +1,14 @@
-import { requireChatGPTUser } from "./chatgpt-auth";
-import { initialize, readState } from "../lib/server";
-import PunchApp from "./punch-app";
+import { createServerUseCases } from "../src/bootstrap/server-usecases";
+import { requireChatGPTUser } from "../src/infrastructure/auth/sites-authentication";
+import PunchInApp from "../src/presentation/app/punch-in-app";
 export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await requireChatGPTUser("/");
-  await initialize(user.userId);
+  const useCases = createServerUseCases();
+  await useCases.initializeUser(user.userId);
   return (
-    <PunchApp
-      initial={await readState(user.userId)}
+    <PunchInApp
+      initial={await useCases.readState(user.userId)}
       displayName={user.displayName}
       draftScope={user.userId}
     />

@@ -1,6 +1,6 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { punchButtonPositions } from "../lib/punch-layout";
+import test from "node:test";
+import { punchButtonPositions } from "../src/presentation/tracking/punch-button-layout";
 function rowCounts(count: number, columns: 2 | 3) {
   const rows = new Map<number, number>();
   for (const position of punchButtonPositions(count, columns))

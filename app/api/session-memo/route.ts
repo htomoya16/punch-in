@@ -1,15 +1,11 @@
-import { api, json, readJson, userId } from "../../../lib/api";
-import { getDatabase } from "../../../lib/database";
-import { sessionMemoSchema, writeSessionMemo } from "../../../lib/session-memo-server";
+import { createServerUseCases } from "../../../src/bootstrap/server-usecases";
+import { api, json, readJson, userId } from "../../../src/presentation/http/api-response";
 export const dynamic = "force-dynamic";
 export async function PUT(request: Request) {
-  return api(async () =>
-    json(
-      await writeSessionMemo(
-        getDatabase(),
-        await userId(),
-        sessionMemoSchema.parse(await readJson(request, 32000)),
-      ),
-    ),
-  );
+  return api(async () => {
+    const user = await userId();
+    return json(
+      await createServerUseCases().saveWorkEntryMemo(user, await readJson(request, 32000)),
+    );
+  });
 }

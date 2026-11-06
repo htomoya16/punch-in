@@ -1,12 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
-  sqliteTable,
-  text,
+  check,
+  index,
   integer,
   primaryKey,
-  index,
+  sqliteTable,
+  text,
   uniqueIndex,
-  check,
 } from "drizzle-orm/sqlite-core";
 
 export const preferences = sqliteTable("preferences", {

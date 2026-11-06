@@ -1,13 +1,21 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { controlWork, allocations, realTime, preserveMemos, setMemo, memoKey } from "../lib/work";
-import { cloneDocument, documentFingerprint } from "../lib/note-templates";
-import { backupSchema } from "../lib/validation";
-import { sessionSchema } from "../lib/validation";
-import type { Session } from "../lib/model";
+import test from "node:test";
+import { sessionSchema } from "../src/application/validation/backup-schema";
+import { cloneDocument, documentFingerprint } from "../src/domain/notes/note-template";
+import {
+  calculateAllocatedDurationsByCategory,
+  calculateRecordedDuration,
+} from "../src/domain/tracking/duration-allocation";
+import type { TrackingSession } from "../src/domain/tracking/tracking-session";
+import { applyTrackingCommand } from "../src/domain/tracking/tracking-transitions";
+import {
+  getWorkEntryMemoKey,
+  preserveWorkEntryMemos,
+  updateWorkEntryMemo,
+} from "../src/domain/tracking/work-entry-memo";
 const minute = 60000,
   base = Date.parse("2026-11-01T01:00:00Z");
-const session: Session = {
+const session: TrackingSession = {
   id: "parent",
   categoryId: "a",
   startedAt: base,
@@ -20,21 +28,21 @@ const session: Session = {
   updatedAt: base,
 };
 function parallel() {
-  return controlWork(session, "join", "b", base + 20 * minute);
+  return applyTrackingCommand(session, "join", "b", base + 20 * minute);
 }
 function closed() {
-  return controlWork(parallel(), "end", "", base + 60 * minute);
+  return applyTrackingCommand(parallel(), "end", "", base + 60 * minute);
 }
 test("途中参加は重複区間だけ均等配分: A40分・B20分", () => {
   const s = closed();
   assert.deepEqual(
-    [...allocations(s, 0)],
+    [...calculateAllocatedDurationsByCategory(s, 0)],
     [
       ["a", 40 * minute],
       ["b", 20 * minute],
     ],
   );
-  assert.equal(realTime(s, 0), 60 * minute);
+  assert.equal(calculateRecordedDuration(s, 0), 60 * minute);
   assert.equal(s.id, session.id);
   assert.equal(s.startedAt, base);
   assert.equal(s.endedAt, base + 60 * minute);
@@ -43,10 +51,10 @@ test("途中参加は重複区間だけ均等配分: A40分・B20分", () => {
 });
 test("作業ごとの一時停止中は残った作業へ100%配分", () => {
   let s = parallel();
-  s = controlWork(s, "pause", "a", base + 40 * minute);
-  s = controlWork(s, "end", "", base + 60 * minute);
+  s = applyTrackingCommand(s, "pause", "a", base + 40 * minute);
+  s = applyTrackingCommand(s, "end", "", base + 60 * minute);
   assert.deepEqual(
-    [...allocations(s, 0)],
+    [...calculateAllocatedDurationsByCategory(s, 0)],
     [
       ["a", 30 * minute],
       ["b", 30 * minute],
@@ -54,25 +62,25 @@ test("作業ごとの一時停止中は残った作業へ100%配分", () => {
   );
 });
 test("全作業一時停止中は実時間も配分も増えず、再開で続ける", () => {
-  let s = controlWork(session, "pause", "a", base + 10 * minute);
-  assert.equal(realTime(s, base + 50 * minute), 10 * minute);
+  let s = applyTrackingCommand(session, "pause", "a", base + 10 * minute);
+  assert.equal(calculateRecordedDuration(s, base + 50 * minute), 10 * minute);
   assert.equal(s.endedAt, null);
-  s = controlWork(s, "resume", "a", base + 50 * minute);
-  s = controlWork(s, "end", "", base + 60 * minute);
-  assert.equal(realTime(s, 0), 20 * minute);
+  s = applyTrackingCommand(s, "resume", "a", base + 50 * minute);
+  s = applyTrackingCommand(s, "end", "", base + 60 * minute);
+  assert.equal(calculateRecordedDuration(s, 0), 20 * minute);
   assert.equal(s.endedAt, base + 60 * minute);
 });
 test("終了後の再打刻は以前のメモを残し新しい記録を追加する", () => {
   let s = parallel();
-  s = setMemo(s, memoKey(s, "b"), "B memo");
-  s = controlWork(s, "finish", "b", base + 30 * minute);
-  s = controlWork(s, "join", "b", base + 50 * minute);
-  s = controlWork(s, "end", "", base + 60 * minute);
+  s = updateWorkEntryMemo(s, getWorkEntryMemoKey(s, "b"), "B memo");
+  s = applyTrackingCommand(s, "finish", "b", base + 30 * minute);
+  s = applyTrackingCommand(s, "join", "b", base + 50 * minute);
+  s = applyTrackingCommand(s, "end", "", base + 60 * minute);
   assert.equal(s.work!.members.length, 3);
   assert.equal(s.work!.members[1].memo, "B memo");
   assert.equal(s.work!.members[2].memo, "");
   assert.deepEqual(
-    [...allocations(s, 0)],
+    [...calculateAllocatedDurationsByCategory(s, 0)],
     [
       ["a", 50 * minute],
       ["b", 10 * minute],
@@ -84,7 +92,7 @@ test("手動計上は実時間から独立し、比率モードでは合計を�
     w = s.work!;
   assert.deepEqual(
     [
-      ...allocations(
+      ...calculateAllocatedDurationsByCategory(
         {
           ...s,
           work: {
@@ -103,7 +111,7 @@ test("手動計上は実時間から独立し、比率モードでは合計を�
   );
   assert.deepEqual(
     [
-      ...allocations(
+      ...calculateAllocatedDurationsByCategory(
         {
           ...s,
           work: {
@@ -122,18 +130,18 @@ test("手動計上は実時間から独立し、比率モードでは合計を�
   );
 });
 test("ミリ秒の端数でも配分合計が実時間と一致", () => {
-  let s = controlWork(session, "join", "b", base);
-  s = controlWork(s, "join", "c", base);
-  s = controlWork(s, "end", "", base + 1001);
+  let s = applyTrackingCommand(session, "join", "b", base);
+  s = applyTrackingCommand(s, "join", "c", base);
+  s = applyTrackingCommand(s, "end", "", base + 1001);
   assert.equal(
-    [...allocations(s, 0).values()].reduce((a, b) => a + b, 0),
+    [...calculateAllocatedDurationsByCategory(s, 0).values()].reduce((a, b) => a + b, 0),
     1001,
   );
 });
 test("遅れた構造差分は作業ごとのメモを巻き戻さない", () => {
-  const old = setMemo(parallel(), memoKey(parallel(), "b"), "fresh");
-  const next = controlWork(parallel(), "end", "", base + 60 * minute);
-  assert.equal(preserveMemos(next, old).work!.members[1].memo, "fresh");
+  const old = updateWorkEntryMemo(parallel(), getWorkEntryMemoKey(parallel(), "b"), "fresh");
+  const next = applyTrackingCommand(parallel(), "end", "", base + 60 * minute);
+  assert.equal(preserveWorkEntryMemos(next, old).work!.members[1].memo, "fresh");
 });
 test("不正な区間・共通時刻の範囲外を拒否", () => {
   const s = closed();
@@ -174,9 +182,9 @@ test("テンプレート複製は入れ子のIDを更新し本文と表を保つ
 });
 
 test("比率0の作業に端数を配分しない", () => {
-  let s = controlWork(session, "join", "b", base);
-  s = controlWork(s, "join", "c", base);
-  s = controlWork(s, "end", "", base + 1);
+  let s = applyTrackingCommand(session, "join", "b", base);
+  s = applyTrackingCommand(s, "join", "c", base);
+  s = applyTrackingCommand(s, "end", "", base + 1);
   s = {
     ...s,
     work: {
@@ -185,17 +193,17 @@ test("比率0の作業に端数を配分しない", () => {
       members: s.work!.members.map((m, i) => ({ ...m, weight: i === 2 ? 0 : 1 })),
     },
   };
-  assert.equal(allocations(s, 0).get("c"), 0);
+  assert.equal(calculateAllocatedDurationsByCategory(s, 0).get("c"), 0);
   assert.equal(
-    [...allocations(s, 0).values()].reduce((a, b) => a + b, 0),
+    [...calculateAllocatedDurationsByCategory(s, 0).values()].reduce((a, b) => a + b, 0),
     1,
   );
 });
 
 test("作業別の実時間はその作業が参加した区間だけ数える", () => {
   const s = closed();
-  assert.equal(realTime(s, 0, "a"), 60 * minute);
-  assert.equal(realTime(s, 0, "b"), 40 * minute);
-  assert.equal(realTime(s, 0, "unknown"), 0);
-  assert.equal(allocations(s, 0).get("b"), 20 * minute);
+  assert.equal(calculateRecordedDuration(s, 0, "a"), 60 * minute);
+  assert.equal(calculateRecordedDuration(s, 0, "b"), 40 * minute);
+  assert.equal(calculateRecordedDuration(s, 0, "unknown"), 0);
+  assert.equal(calculateAllocatedDurationsByCategory(s, 0).get("b"), 20 * minute);
 });

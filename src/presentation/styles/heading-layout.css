@@ -1,0 +1,103 @@
+/* Heading text and its empty placeholder use one size and baseline. */
+
+.block-note-shell [data-content-type="heading"] {
+  --level: 25px;
+  font-size: var(--level);
+  line-height: 1.4;
+}
+
+.block-note-shell [data-content-type="heading"][data-level="2"] {
+  --level: 21px;
+}
+
+.block-note-shell [data-content-type="heading"][data-level="3"] {
+  --level: 17px;
+}
+
+.block-note-shell [data-content-type="heading"] :is(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+.block-note-shell [data-content-type="heading"]:has(.ProseMirror-trailingBreak:only-child)::after {
+  content: "見出し1" !important;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.block-note-shell
+  [data-content-type="heading"][data-level="2"]:has(.ProseMirror-trailingBreak:only-child)::after {
+  content: "見出し2" !important;
+}
+
+.block-note-shell
+  [data-content-type="heading"][data-level="3"]:has(.ProseMirror-trailingBreak:only-child)::after {
+  content: "見出し3" !important;
+}
+
+@container (max-width:400px) {
+  .work-record-times {
+    gap: 10px;
+  }
+  .work-record-times time,
+  .work-record-times strong {
+    font-size: 13px;
+  }
+  .work-record .record-actions {
+    gap: 2px;
+  }
+  .work-record .record-actions .icon-button {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 760px) {
+  .work-record .inline-memo textarea {
+    font-size: 16px;
+  }
+  .work-record-times time,
+  .work-record-times strong {
+    font-size: 14px;
+  }
+  .template-panel {
+    min-height: 440px;
+  }
+  .template-editor {
+    max-height: 65vh;
+  }
+  .parallel-controls {
+    max-width: 370px;
+  }
+}
+
+.history-feed {
+  container-type: inline-size;
+}
+
+@container (max-width:480px) {
+  .history-timeline .timeline-axis > span:nth-child(3),
+  .history-timeline .timeline-axis > span:nth-child(5) {
+    visibility: hidden;
+  }
+  .history-timeline .timeline-axis {
+    font-size: 10px;
+  }
+  .history-timeline .timeline-row > span {
+    font-size: 11px;
+  }
+}
+
+.current-state.is-paused .pulse-dot {
+  animation: none;
+  box-shadow: none;
+  background: #8b9aab;
+}
+
+.punch-button.paused {
+  border-style: dashed;
+}
+
+.punch-button.paused .punch-running-label {
+  color: #6e8094;
+}

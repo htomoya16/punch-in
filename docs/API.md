@@ -49,7 +49,7 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
 
 ## GET /api/export
 
-以下のJSONを添付ファイルとして返す。正確な型は `lib/model.ts`、入力制約は `lib/validation.ts` を参照。
+以下のJSONを添付ファイルとして返す。正確な型は `src/application/contracts/app-state.ts`、入力制約は `src/application/validation/backup-schema.ts` を参照。
 
 ```json
 {

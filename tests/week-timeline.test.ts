@@ -1,11 +1,11 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { buildWeekTimeline, weekDayTotal } from "../lib/week-timeline";
-import { controlWork } from "../lib/work";
-import type { Session } from "../lib/model";
+import test from "node:test";
+import type { TrackingSession } from "../src/domain/tracking/tracking-session";
+import { applyTrackingCommand } from "../src/domain/tracking/tracking-transitions";
+import { buildWeekTimeline, weekDayTotal } from "../src/domain/tracking/week-timeline";
 const at = Date.parse("2026-11-03T01:00:00Z"),
   hour = 3600000;
-const base: Session = {
+const base: TrackingSession = {
   id: "one",
   categoryId: "a",
   memo: "",
@@ -25,17 +25,17 @@ test("週タイムラインは空の日も含め月曜から7日を同じ時間�
   assert.equal(new Date(rows[0].start).toISOString(), "2026-11-01T20:00:00.000Z");
 });
 test("並行区間は別レーンへ、連続する同じ記録は結合し実時間は1回数える", () => {
-  let s = controlWork(base, "join", "b", at + hour / 3);
-  s = controlWork(s, "end", "", at + hour);
+  let s = applyTrackingCommand(base, "join", "b", at + hour / 3);
+  s = applyTrackingCommand(s, "end", "", at + hour);
   const day = buildWeekTimeline("2026-11-03", [s], 300, "Asia/Tokyo")[1];
   assert.equal(day.segments.length, 2);
   assert.equal(day.lanes, 2);
   assert.equal(weekDayTotal(day, at + 10 * hour), hour);
 });
 test("一時停止の隙間を塗らず、停止中の合計も増やさない", () => {
-  let s = controlWork(base, "pause", "a", at + hour / 4);
-  s = controlWork(s, "resume", "a", at + hour / 2);
-  s = controlWork(s, "pause", "a", at + hour);
+  let s = applyTrackingCommand(base, "pause", "a", at + hour / 4);
+  s = applyTrackingCommand(s, "resume", "a", at + hour / 2);
+  s = applyTrackingCommand(s, "pause", "a", at + hour);
   const day = buildWeekTimeline("2026-11-03", [s], 300, "Asia/Tokyo")[1];
   assert.equal(day.segments.length, 2);
   assert.equal(weekDayTotal(day, at + 10 * hour), hour * 0.75);
@@ -62,7 +62,12 @@ test("夏時間で存在しない2時30分の区切りは最初に存在する3�
   assert.equal(new Date(rows[6].start).toISOString(), "2026-03-08T07:00:00.000Z");
 });
 test("カテゴリで絞ると棒と実時間も対象の参加区間にそろう", () => {
-  const s = controlWork(controlWork(base, "join", "b", at + hour / 3), "end", "", at + hour),
+  const s = applyTrackingCommand(
+      applyTrackingCommand(base, "join", "b", at + hour / 3),
+      "end",
+      "",
+      at + hour,
+    ),
     day = buildWeekTimeline("2026-11-03", [s], 300, "Asia/Tokyo", "b")[1];
   assert.equal(day.segments.length, 1);
   assert.equal(day.segments[0].categoryId, "b");

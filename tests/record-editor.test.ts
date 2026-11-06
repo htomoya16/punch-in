@@ -1,41 +1,42 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 import {
-  recordTimeForDay,
-  replaceDatePart,
-  editedTime,
   daysInMonth,
   editedMinutes,
-} from "../lib/record-editor";
-import { businessDay, timeInput } from "../lib/time";
+  editedTime,
+  recordTimeForDay,
+  replaceDatePart,
+} from "../src/presentation/tracking/record-editor";
+import { resolveBusinessDay } from "../src/shared/time/calendar";
+import { formatDateTimeInput } from "../src/shared/time/date-time-format";
 const prefs = { timezone: "Asia/Tokyo", dayStart: 300 };
 test("日付行から追加する記録は押した記録日と現在の時刻で初期化する", () => {
   const now = Date.parse("2026-11-04T14:23:45+09:00"),
     stamp = recordTimeForDay("2026-10-30", now, prefs);
-  assert.equal(timeInput(stamp, prefs.timezone), "2026-10-30T14:23:45");
-  assert.equal(businessDay(stamp, prefs.dayStart, prefs.timezone), "2026-10-30");
+  assert.equal(formatDateTimeInput(stamp, prefs.timezone), "2026-10-30T14:23:45");
+  assert.equal(resolveBusinessDay(stamp, prefs.dayStart, prefs.timezone), "2026-10-30");
 });
 test("午前5時区切りの深夜2時は指定日の翌暦日へ合わせる", () => {
   const now = Date.parse("2026-11-04T02:23:45+09:00"),
     stamp = recordTimeForDay("2026-10-30", now, prefs);
-  assert.equal(timeInput(stamp, prefs.timezone), "2026-10-31T02:23:45");
-  assert.equal(businessDay(stamp, prefs.dayStart, prefs.timezone), "2026-10-30");
+  assert.equal(formatDateTimeInput(stamp, prefs.timezone), "2026-10-31T02:23:45");
+  assert.equal(resolveBusinessDay(stamp, prefs.dayStart, prefs.timezone), "2026-10-30");
 });
 test("区切りぴったりとUTC・他のタイムゾーンにも対応する", () => {
   const now = Date.parse("2026-11-04T05:00:00+09:00");
   assert.equal(
-    timeInput(recordTimeForDay("2026-10-30", now, prefs), prefs.timezone),
+    formatDateTimeInput(recordTimeForDay("2026-10-30", now, prefs), prefs.timezone),
     "2026-10-30T05:00:00",
   );
   const p = { timezone: "America/New_York", dayStart: 0 },
     stamp = recordTimeForDay("2026-10-30", now, p);
-  assert.equal(timeInput(stamp, p.timezone), "2026-10-30T15:00:00");
+  assert.equal(formatDateTimeInput(stamp, p.timezone), "2026-10-30T15:00:00");
 });
 test("初期時刻が夏時間の存在しない時刻に当たる場合は有効な時刻へ進める", () => {
   const p = { timezone: "America/New_York", dayStart: 0 },
     now = Date.parse("2026-03-07T07:30:00Z");
   assert.equal(
-    timeInput(recordTimeForDay("2026-03-08", now, p), p.timezone),
+    formatDateTimeInput(recordTimeForDay("2026-03-08", now, p), p.timezone),
     "2026-03-08T03:00:00",
   );
 });

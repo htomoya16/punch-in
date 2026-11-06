@@ -1,8 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-import { bootstrapQueries } from "../lib/bootstrap";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { bootstrapQueries } from "../src/infrastructure/persistence/d1/initialize-user";
 const user = "bootstrap-test";
 const legacy = [
   ["research", "研究", "#168ab5", 0],

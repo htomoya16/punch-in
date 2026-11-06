@@ -40,19 +40,15 @@ npmのキャッシュが書き込み不可の場合は、`npm_config_cache=/tmp/
 
 ## ソースの構成
 
-| 場所 | 内容 |
-|---|---|
-| `app/punch-app.tsx`, `app/globals.css` | 打刻・履歴・設定のレスポンシブUI |
-| `app/api/` | 認証済みAPI |
-| `lib/punch-server.ts`, `lib/punch-state.ts` | 打刻の差分処理・即時仮表示・確定値への反映 |
-| `lib/daily-notes-store.ts`, `lib/daily-note-server.ts`, `app/components/notes/` | 日別メモの保存・復元・独立したエディター |
-| `lib/server.ts` | 所有者スコープ、楽観ロック、atomic batchによる書き込み |
-| `lib/time.ts` | 日付、タイムゾーン、期間、経過時間の純粋関数 |
-| `lib/records.ts`, `lib/validation.ts` | 時間重複、取り込み検証 |
-| `db/schema.ts`, `drizzle/` | DB構造と追記式マイグレーション |
-| [仕様](SPEC.md) | 合意した仕様と判断 |
-| [APIとデータ移行](API.md) | APIと移行JSONの仕様 |
-| [引き継ぎ](HANDOVER.md) | 再実装・運用の引き継ぎ |
+全体の責務・依存方向・保存の保証は[アーキテクチャ](ARCHITECTURE.md)を参照してください。フレームワークの入口は`app/`、実装は`src/`にあります。
+
+```sh
+npm run format        # 改行・インデントを統一
+npm run format:check  # 整形の差分を検出
+npm run check:architecture # 依存方向・ブラウザへのサーバー実装混入を検出
+```
+
+単体テストは`tests/`と`src/`配下の`.test.ts`から自動検出します。HTTP・ローカルDBの検証スクリプトは従来どおり明示的に実行します。
 
 ## Sitesへの反映
 
@@ -70,4 +66,4 @@ GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履
 再打刻と週タイムラインの回帰テストは`npm test`に含まれる。起動したローカルWorkerでは`TEST_BASE_URL=http://127.0.0.1:8791 node tests/work-entries-api-test.mjs`で、再打刻・個別メモ・終了時刻・配分・JSON復元・個別削除を確認できる。
 
 
-日時編集の回帰検証は`npm test`と、ローカルWorkerに対する`TEST_BASE_URL=http://127.0.0.1:8792 node tests/work-time-api-test.mjs`で行う。ホイール共通部品は`app/components/fields/date-time-field.tsx`、記録日からの初期化は`lib/record-editor.ts`、並行記録の日時再構成は`lib/work-time.ts`を参照する。
+日時編集の回帰検証は`npm test`と、ローカルWorkerに対する`TEST_BASE_URL=http://127.0.0.1:8792 node tests/work-time-api-test.mjs`で行う。ホイール共通部品は`src/presentation/components/fields/date-time-field.tsx`、記録日からの初期化は`src/presentation/tracking/record-editor.ts`、並行記録の日時再構成は`src/domain/tracking/edit-work-entry-time.ts`を参照する。

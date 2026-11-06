@@ -1,21 +1,22 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import type { Session } from "../lib/model";
+import test from "node:test";
 import {
-  controlWork,
-  removeWork,
-  allocations,
-  realTime,
-  memberKey,
-  memberRange,
-  memberIntervals,
-  preserveMemos,
-} from "../lib/work";
-import { weekDays } from "../lib/history-week";
-import { diagonalColors, elapsedColors } from "../lib/elapsed-style";
+  calculateAllocatedDurationsByCategory,
+  calculateRecordedDuration,
+} from "../src/domain/tracking/duration-allocation";
+import type { TrackingSession } from "../src/domain/tracking/tracking-session";
+import { applyTrackingCommand, removeWorkEntry } from "../src/domain/tracking/tracking-transitions";
+import { getWorkEntryId } from "../src/domain/tracking/work-entry";
+import {
+  getWorkEntryIntervals,
+  getWorkEntryTimeRange,
+} from "../src/domain/tracking/work-entry-intervals";
+import { preserveWorkEntryMemos } from "../src/domain/tracking/work-entry-memo";
+import { weekDays } from "../src/presentation/history/week-days";
+import { diagonalColors, elapsedColors } from "../src/presentation/tracking/elapsed-colors";
 const start = Date.parse("2026-11-02T01:00:00Z"),
   minute = 60000;
-const base: Session = {
+const base: TrackingSession = {
   id: "one",
   categoryId: "a",
   memo: "A",
@@ -28,12 +29,17 @@ const base: Session = {
   updatedAt: start,
 };
 function ended() {
-  return controlWork(controlWork(base, "join", "b", start), "end", "", start + 60 * minute);
+  return applyTrackingCommand(
+    applyTrackingCommand(base, "join", "b", start),
+    "end",
+    "",
+    start + 60 * minute,
+  );
 }
 test("自動配分の片方を削除すると残る作業へ再配分し実時間を二重加算しない", () => {
-  const s = removeWork(ended(), "b", start + 60 * minute);
-  assert.equal(allocations(s, 0).get("a"), 60 * minute);
-  assert.equal(realTime(s, 0), 60 * minute);
+  const s = removeWorkEntry(ended(), "b", start + 60 * minute);
+  assert.equal(calculateAllocatedDurationsByCategory(s, 0).get("a"), 60 * minute);
+  assert.equal(calculateRecordedDuration(s, 0), 60 * minute);
   assert.equal(s.memo, "A");
 });
 test("手動配分の片方を削除しても残る指定時間は変更しない", () => {
@@ -43,23 +49,23 @@ test("手動配分の片方を削除しても残る指定時間は変更しな�
     mode: "manual",
     members: s.work!.members.map((m) => ({ ...m, manualMs: 30 * minute })),
   };
-  const result = removeWork(s, "b", start + 60 * minute);
-  assert.equal(allocations(result, 0).get("a"), 30 * minute);
-  assert.equal(realTime(result, 0), 60 * minute);
+  const result = removeWorkEntry(s, "b", start + 60 * minute);
+  assert.equal(calculateAllocatedDurationsByCategory(result, 0).get("a"), 30 * minute);
+  assert.equal(calculateRecordedDuration(result, 0), 60 * minute);
 });
 test("削除した作業だけの区間は実時間から取り除く", () => {
-  let s = controlWork(base, "join", "b", start + 20 * minute);
-  s = controlWork(s, "finish", "a", start + 40 * minute);
-  s = controlWork(s, "end", "", start + 60 * minute);
-  const result = removeWork(s, "b", start + 60 * minute);
-  assert.equal(realTime(result, 0), 40 * minute);
-  assert.equal(allocations(result, 0).get("a"), 40 * minute);
-  assert.equal(memberRange(result, "a").end, start + 40 * minute);
+  let s = applyTrackingCommand(base, "join", "b", start + 20 * minute);
+  s = applyTrackingCommand(s, "finish", "a", start + 40 * minute);
+  s = applyTrackingCommand(s, "end", "", start + 60 * minute);
+  const result = removeWorkEntry(s, "b", start + 60 * minute);
+  assert.equal(calculateRecordedDuration(result, 0), 40 * minute);
+  assert.equal(calculateAllocatedDurationsByCategory(result, 0).get("a"), 40 * minute);
+  assert.equal(getWorkEntryTimeRange(result, "a").end, start + 40 * minute);
 });
 test("最後に動いている作業の削除で残った終了済み記録を閉じる", () => {
-  let s = controlWork(base, "join", "b", start);
-  s = controlWork(s, "finish", "a", start + 20 * minute);
-  const result = removeWork(s, "b", start + 60 * minute);
+  let s = applyTrackingCommand(base, "join", "b", start);
+  s = applyTrackingCommand(s, "finish", "a", start + 20 * minute);
+  const result = removeWorkEntry(s, "b", start + 60 * minute);
   assert.equal(result.endedAt, start + 20 * minute);
   assert.equal(
     result.work!.intervals.some((i) => i.end === null),
@@ -67,29 +73,29 @@ test("最後に動いている作業の削除で残った終了済み記録を�
   );
 });
 test("終了後の再打刻は開始・終了と区間を別々に記録する", () => {
-  let s = controlWork(base, "join", "b", start + 10 * minute);
-  s = controlWork(s, "finish", "b", start + 20 * minute);
-  s = controlWork(s, "join", "b", start + 30 * minute);
-  s = controlWork(s, "end", "", start + 40 * minute);
-  assert.equal(memberRange(s, "b").start, start + 10 * minute);
-  assert.equal(memberRange(s, "b").end, start + 20 * minute);
-  assert.equal(memberIntervals(s, "b").length, 1);
-  const second = memberKey(s.work!.members[2]);
-  assert.equal(memberRange(s, second).start, start + 30 * minute);
-  assert.equal(memberRange(s, second).end, start + 40 * minute);
-  assert.equal(memberIntervals(s, "a").length, 1);
+  let s = applyTrackingCommand(base, "join", "b", start + 10 * minute);
+  s = applyTrackingCommand(s, "finish", "b", start + 20 * minute);
+  s = applyTrackingCommand(s, "join", "b", start + 30 * minute);
+  s = applyTrackingCommand(s, "end", "", start + 40 * minute);
+  assert.equal(getWorkEntryTimeRange(s, "b").start, start + 10 * minute);
+  assert.equal(getWorkEntryTimeRange(s, "b").end, start + 20 * minute);
+  assert.equal(getWorkEntryIntervals(s, "b").length, 1);
+  const second = getWorkEntryId(s.work!.members[2]);
+  assert.equal(getWorkEntryTimeRange(s, second).start, start + 30 * minute);
+  assert.equal(getWorkEntryTimeRange(s, second).end, start + 40 * minute);
+  assert.equal(getWorkEntryIntervals(s, "a").length, 1);
 });
 test("古い並行記録は既存の参加区間から時刻を復元し推定であることを示す", () => {
   const s = ended();
   s.work = { ...s.work!, members: s.work!.members.map(({ startedAt, endedAt, ...m }) => m) };
-  assert.equal(memberRange(s, "b").start, start);
-  assert.equal(memberRange(s, "b").end, start + 60 * minute);
-  assert.equal(memberRange(s, "b").inferredEnd, true);
+  assert.equal(getWorkEntryTimeRange(s, "b").start, start);
+  assert.equal(getWorkEntryTimeRange(s, "b").end, start + 60 * minute);
+  assert.equal(getWorkEntryTimeRange(s, "b").inferredEnd, true);
 });
 test("削除の差分で消した先頭メモを残る作業へコピーしない", () => {
   const s = ended(),
-    next = removeWork(s, "a", start + 60 * minute);
-  assert.equal(preserveMemos(next, s).memo, "");
+    next = removeWorkEntry(s, "a", start + 60 * minute);
+  assert.equal(preserveWorkEntryMemos(next, s).memo, "");
 });
 test("週のページは記録のない日も含め月曜から日曜の7日で固定する", () => {
   const days = weekDays("2026-11-03", [{ ...base, endedAt: start + minute }]);
@@ -113,7 +119,7 @@ test("週のページは年越しとうるう日も7日で表示する", () => {
   assert.equal(weekDays("2028-02-29", [])[6].day, "2028-03-05");
 });
 test("斜めの色分けは均等で一時停止中の色を含めない", () => {
-  let s = controlWork(base, "join", "b", start);
+  let s = applyTrackingCommand(base, "join", "b", start);
   const cats = [
     { id: "a", name: "A", color: "#168ab5", hidden: false, archived: false, position: 0 },
     { id: "b", name: "B", color: "#12a89a", hidden: false, archived: false, position: 1 },
@@ -121,13 +127,13 @@ test("斜めの色分けは均等で一時停止中の色を含めない", () =>
   const colors = elapsedColors(s, cats);
   assert.equal(colors.length, 2);
   assert.match(diagonalColors(colors)!, /50%/);
-  s = controlWork(s, "pause", "a", start + minute);
+  s = applyTrackingCommand(s, "pause", "a", start + minute);
   assert.equal(elapsedColors(s, cats).length, 1);
   assert.equal(diagonalColors(elapsedColors(s, cats)), undefined);
 });
 
 test("旧記録に参加区間も時刻もない作業には他の操作時刻を補わない", () => {
-  const s: Session = {
+  const s: TrackingSession = {
     ...base,
     work: {
       version: 1,
@@ -139,9 +145,9 @@ test("旧記録に参加区間も時刻もない作業には他の操作時刻�
       intervals: [{ start, end: null, categoryIds: ["a"] }],
     },
   };
-  const next = controlWork(s, "pause", "a", start + minute);
-  assert.equal(memberRange(next, "b").start, null);
-  assert.equal(memberRange(next, "b").end, null);
+  const next = applyTrackingCommand(s, "pause", "a", start + minute);
+  assert.equal(getWorkEntryTimeRange(next, "b").start, null);
+  assert.equal(getWorkEntryTimeRange(next, "b").end, null);
   assert.equal(next.work!.members[1].startedAt, undefined);
   assert.equal(next.work!.members[1].endedAt, undefined);
 });

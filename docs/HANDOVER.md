@@ -1,5 +1,7 @@
 # 引き継ぎ・再実装
 
+現在の構成は[アーキテクチャ](ARCHITECTURE.md)を参照。Domain・Usecases・Portsを保ち、接続先の差し替えはInfrastructureとBootstrapで行う。以下の過去の検証・設計判断も、既存データと操作の互換性として維持する。
+
 ## 判断
 
 - Sitesにまとめて公開するため、Go/Ginは初期実装に使わずTypeScriptを採用した。
@@ -12,7 +14,7 @@
 ## Go/Ginなどで作り直す場合
 
 1. 現アプリの設定から全データをJSONで書き出す。
-2. `docs/API.md` / `lib/model.ts` / `lib/validation.ts` から新しいDBとインポーターを作る。ミリ秒はGoのint64で保持する。
+2. `docs/API.md` / `src/application/contracts/app-state.ts` / `src/application/validation/backup-schema.ts` から新しいDBとインポーターを作る。ミリ秒はGoのint64で保持する。
 3. 認証は新しい基盤で実装し、新アカウントと所有データを関連づける。Sites内のユーザーIDは他のSiteや新しい認証のIDと一致するとは限らない。
 4. businessDay、dayStart、timezoneをそのまま移行する。開始時刻だけから現在の設定で全件再計算しない。
 5. 移行中は旧アプリの計測を終了する。最終JSONを取り込んだ後、件数・種類別合計・深夜の所属日を比較する。
@@ -36,10 +38,10 @@
 ## 日別メモの設計
 
 - `daily_notes` は `(user_id,day)` が主キー。Markdownをそのまま保存する。日付は本人の論理日で、日別メモの更新ではpreferences.revisionを増やさない。
-- `lib/daily-note-server.ts` が所有者スコープ・CAS・再試行を担当する。空本文も版を残す。再実装時も古い保存で新しい内容を上書きしない設計を維持する。
-- `lib/daily-notes-store.ts` は日付別の保存キューと下書き復元。入力は800ms、ブラウザ下書きは150msでまとめる。送信中の追加入力を古い応答で置き換えない。応答不明の再試行は同じmutationId・本文・expectedVersionを使う。
+- `src/infrastructure/persistence/d1/daily-note-repository.ts` が所有者スコープ・CAS・再試行を担当する。空本文も版を残す。再実装時も古い保存で新しい内容を上書きしない設計を維持する。
+- `src/presentation/notes/daily-note-store.ts` は日付別の保存キューと下書き復元。入力は800ms、ブラウザ下書きは150msでまとめる。送信中の追加入力を古い応答で置き換えない。応答不明の再試行は同じmutationId・本文・expectedVersionを使う。
 - ブラウザ下書きはユーザーIDと日付で分離する。保存先はlocalStorageで、端末をまたぐ未送信下書きの同期は行わない。プライベートブラウズや容量不足時もサーバー保存は続くが、ローカル復元はブラウザの制限を受ける。
-- `app/components/notes/` は初回に開いたときだけ読み込み、BlockNote本体もメモの取得後にクライアントで読み込む。打刻画面の毎秒更新とメモ入力は別の状態にする。
+- `src/presentation/notes/components/` は初回に開いたときだけ読み込み、BlockNote本体もメモの取得後にクライアントで読み込む。打刻画面の毎秒更新とメモ入力は別の状態にする。
 - v4移行はtemplates・defaultTemplateId・sessions.workとdailyNotesのday・markdown・updatedAt・document・originalMarkdownを引き継ぐ。認証IDは再関連づけ、versionは取り込み先で1から始める。すでにある日付は上書きしない。v1は日別メモを変更しない。
 - `npm run test:notes-api` は起動済みのローカルWorker専用。本人・他人の分離、CAS、再試行、304、打刻との独立、v1/v2/v3移行を検証する。本番では実行しない。
 
@@ -47,9 +49,9 @@
 
 ## セルでのメモ編集と集計
 
-- `lib/session-memo-server.ts` は本文一致のCASでsessions.memoだけを更新し、同じD1バッチでpreferences.memo_revisionを増やす。打刻のrevisionとは独立し、時刻・updatedAtを変更しない。追加SQLは0003。
-- `lib/session-memos-store.ts` が記録別キュー、下書き、衝突と再試行を扱う。セルを離れても保存は継続する。打刻差分では既知のメモを保ち、state取得ではmemoRevisionも照合する。保存応答だけで全体のmemoRevisionを進めると別の記録の更新を見逃すため、全体取得の版は進めない。
-- `lib/stats.ts` で集計バケット・開始日の所属・計測中の加算を一元化する。表、棒、ホバー内訳を同じ結果から描画し、日付の範囲は履歴への遷移にも使う。時刻は各記録が保持するタイムゾーンで表示する。
+- `src/infrastructure/persistence/d1/work-entry-memo-repository.ts` は本文一致のCASでsessions.memoだけを更新し、同じD1バッチでpreferences.memo_revisionを増やす。打刻のrevisionとは独立し、時刻・updatedAtを変更しない。追加SQLは0003。
+- `src/presentation/tracking/work-entry-memo-store.ts` が記録別キュー、下書き、衝突と再試行を扱う。セルを離れても保存は継続する。打刻差分では既知のメモを保ち、state取得ではmemoRevisionも照合する。保存応答だけで全体のmemoRevisionを進めると別の記録の更新を見逃すため、全体取得の版は進めない。
+- `src/domain/tracking/statistics.ts` で集計バケット・開始日の所属・計測中の加算を一元化する。表、棒、ホバー内訳を同じ結果から描画し、日付の範囲は履歴への遷移にも使う。時刻は各記録が保持するタイムゾーンで表示する。
 - ホバー内訳のデータ取得は不要。長い履歴は内訳30件ずつ、集計表は20期間ずつ描画する。通常の入力はセルだけの状態を更新し、時計や集計全体を毎キーで更新しない。
 - `npm run test:session-memo-api` は起動済みローカルWorker用。所有者、CSRF、CAS、再試行、打刻との並行保存、時刻維持、バックアップを検証する。本番で実行しない。
 
@@ -60,7 +62,7 @@
 - 0004で`daily_notes.document`と`original_markdown`を追加する。元のMarkdownを初回の構造保存と同じSQLで保持する。過去のSQLを再適用しない。
 - `note-document.ts`はエディターのランタイムを読み込まず、JSONの構造・サイズ・種類・安全なリンクを検証する。BlockNoteの未設定値はJSONへ正規化してから保存する。
 - `DailyNotesStore`は本文と構造の組で差分・CAS・再試行を扱う。旧ブラウザ下書きも復元する。保存応答でエディター全体を再生成せず、カーソルとUndoを維持する。フォーカス中はポーリングによる差し替えを避け、競合はCASで検知する。
-- `history.ts`が日付の所属と並びを扱い、`history-feed.tsx`が日単位の追加描画と固定タイムラインを制御する。閲覧日とメモを開いた日を別の状態に保つ。
+- `src/presentation/history/`が日付の所属と並びを扱い、`history-feed.tsx`が週内の日付行と追加描画を制御する。タイムライン自体は固定せず、週の操作行を固定する。閲覧日とメモを開いた日を別の状態に保つ。
 - 履歴APIのDBページングは未導入で、stateは従来どおり全記録を取得する。表示は日・件数で分割するが、長年の大量記録で通信量も抑える場合はAPIのカーソル取得を追加する。
 - `npm run test:blocks-api`はローカルWorker専用。旧メモ移行、構造だけの競合、旧クライアントの拒否、v3の復元、日付インデックスの所有者分離を検証する。
 
@@ -71,12 +73,12 @@
 - 0005は`sessions.work`、0006は`daily_notes.template`と`note_templates`・`note_template_preferences`を追加する。既存の記録は書き換えない。
 - `work.members`は作業ID・個別メモ・状態・配分、`intervals`は実際の参加区間。個別削除ではメンバーの配列位置が変わるため、作業メモは記録ID（id、旧形式はcategoryId）で対象を原子的に解決する。
 - 区間の構造変更とメモの自動保存は独立する。構造更新のSQLで最新メモを引き継ぎ、差分反映でも保存済みメモを保つ。
-- `lib/work.ts`に実時間・配分・状態遷移をまとめる。終了済み記録の配分はWeakMapで再利用し、計測中は時刻に応じて再計算する。
+- `src/domain/tracking/`で実時間・配分・状態遷移をそれぞれ別のモジュールへ分離する。終了済み記録の配分はWeakMapで再利用し、計測中は時刻に応じて再計算する。
 - テンプレート本体のversionとデフォルト選択のversionは独立したCAS。日別メモの初回挿入は明示POSTとINSERT競合回避で1回に限定する。
 - テンプレート適用時のSHA-256はブロックIDを除いて計算し、未編集かどうかの判定に使う。末尾追加後は自動置換対象から外す。
 - v4は旧v1〜v3も取り込む。未保存の旧Markdown下書きは先に原文を保存してから構造へ移行し、テンプレートで上書きしない。
 
-履歴の週表示はlib/history-week.tsで7日分を構成する。UIを週に限定してもstate APIは従来どおり全記録を同期する。作業別の時刻はWorkMemberの任意フィールドとして保持するためDBスキーマ変更は不要。個別削除の際は残ったカテゴリに対応する最新メモを同じDBバッチで引き継ぎ、先頭memoの互換ミラーも更新する。
+履歴の週表示はsrc/presentation/history/week-days.tsで7日分を構成する。UIを週に限定してもstate APIは従来どおり全記録を同期する。作業別の時刻はWorkEntryの任意フィールドとして保持するためDBスキーマ変更は不要。個別削除の際は残ったカテゴリに対応する最新メモを同じDBバッチで引き継ぎ、先頭memoの互換ミラーも更新する。
 
 ## 一括停止と集計表示
 
@@ -87,33 +89,33 @@
 
 ## 再打刻と週の時間軸
 
-- `memberKey`が作業記録の安定したID、`currentMember`が同じカテゴリの最新記録を返す。終了後の再打刻は新しいmemberを追加し、一時停止からの再開では追加しない。
-- `entryAllocations`は記録別、`allocations`はカテゴリ別。表示・配分編集・CSVの各行では前者、集計・割合では後者を使う。終了済みの配分はSession単位でキャッシュする。
+- `getWorkEntryId`が作業記録の安定したID、`findLatestWorkEntry`が同じカテゴリの最新記録を返す。終了後の再打刻は新しいmemberを追加し、一時停止からの再開では追加しない。
+- `calculateAllocatedDurationsByEntry`は記録別、`allocations`はカテゴリ別。表示・配分編集・CSVの各行では前者、集計・割合では後者を使う。終了済みの配分はSession単位でキャッシュする。
 - 構造更新はjson_eachで新旧の記録IDを照合し、同時保存された最新メモを引き継ぐ。位置やカテゴリ名だけで照合しない。
-- `lib/week-timeline.ts`が日の区切りで区間を切り、連続区間を結合してレーンへ割り当てる。モデルはデータ変更時に計算し、終了済みの日は毎秒再描画しない。週の表示範囲へ実時間で切り分けることと、開始日への記録所属は別に扱う。
+- `src/domain/tracking/week-timeline.ts`が日の区切りで区間を切り、連続区間を結合してレーンへ割り当てる。モデルはデータ変更時に計算し、終了済みの日は毎秒再描画しない。週の表示範囲へ実時間で切り分けることと、開始日への記録所属は別に扱う。
 
 
 ## 記録表示と日時編集
 
-- 表示名は「記録時間」（重複なし）と「作業時間」（配分後）へ整理。内部のrealTime/allocationsとJSON形式は維持する。
-- `lib/record-editor.ts`は記録日の初期時刻、月末補正、未変更時のミリ秒保持を担当。`app/components/fields/date-time-field.tsx`を単独・並行の両エディターで共有する。
-- `lib/work-time.ts`が対象の作業記録だけ日時を編集し、区間のイベントを時刻順に処理して重複のない内部区間へ再構成する。メモの最新値はworkUpdate内で記録IDを照合し、同じDB書き込みで引き継ぐ。
+- 表示名は「記録時間」（重複なし）と「作業時間」（配分後）へ整理。内部の計測・配分ルールとJSON形式は維持する。
+- `src/presentation/tracking/record-editor.ts`は記録日の初期時刻、月末補正、未変更時のミリ秒保持を担当。`src/presentation/components/fields/date-time-field.tsx`を単独・並行の両エディターで共有する。
+- `src/domain/tracking/edit-work-entry-time.ts`が対象の作業記録だけ日時を編集し、区間のイベントを時刻順に処理して重複のない内部区間へ再構成する。メモの最新値はbuildSessionUpdateStatement内で記録IDを照合し、同じDB書き込みで引き継ぐ。
 - 履歴の通常遷移は週タイムラインの先頭、集計からの遷移は日付行へ位置合わせする。タイムラインの横位置は時刻の比率で保持し、拡大やメモ開閉で時刻が飛ばないようにする。固定するのは週の操作行だけ。
 
 
-分単位の表示はlib/time.tsのhm・durationLabel・minuteInput・minuteIsoを使う。timeInputや内部モデルは精度を維持する。編集時はlib/record-editor.tsのeditedTime/editedMinutesで、表示値が変わらなければ元の値を保存する。時間を各記録で丸めてから集計しない。週タイムラインの目盛りは専用のグリッド行とし、絶対配置する目盛りのtopを明示して次の日付行へ侵入させない。
+分単位の表示は`src/shared/time/`の`formatDurationMinutes`・`durationLabel`・`formatMinuteDateTimeInput`・`formatMinuteIsoTime`を使う。`formatDateTimeInput`や内部モデルは精度を維持する。編集時はsrc/presentation/tracking/record-editor.tsのeditedTime/editedMinutesで、表示値が変わらなければ元の値を保存する。時間を各記録で丸めてから集計しない。週タイムラインの目盛りは専用のグリッド行とし、絶対配置する目盛りのtopを明示して次の日付行へ侵入させない。
 
-経過時間と集計の表示はapp/components/time/duration-value.tsxへ統一する。親の数字サイズを継承し、単位のみ小さくする。文字列が必要なCSV・aria-label・titleにはhoursMinutesを使う。時刻のclockと区別する。
+経過時間と集計の表示はsrc/presentation/components/time/duration-value.tsxへ統一する。親の数字サイズを継承する。文字列が必要なCSV・aria-label・titleには`formatDurationInWords`を使う。時刻の`formatClockTime`と区別する。
 
-DurationValueは共通のhm関数でHH:mmへ整形する。開始・終了の範囲にはClock3を添える。タイムラインの目盛りには追加しない。
+DurationValueは共通のformatDurationMinutes関数でHH:mmへ整形する。開始・終了の範囲にはClock3を添える。タイムラインの目盛りには追加しない。
 
 打刻画面とサイドバーはDurationValueのsecondsを指定して秒表示にする。WorkRecordsも打刻画面でだけsecondsを有効にし、履歴・集計の初期値は分単位のまま。
 
 
 ## 記録の表示順
 
-- `lib/record-order.ts`で直近5件の選択と並行作業の表示順を扱い、`lib/history-week.ts`で日ごとの記録を昇順にする。`work.members`の先頭は主作業と互換メモに関わるため、保存配列を並べ替えない。
-- メンバーの開始が省略された旧記録は`memberRange`の区間から推定し、不明なら末尾に置く。同時刻は元の相対順を保つ。
-- 作業順は不変のSessionごとにWeakMapで再利用する。メモや時刻の更新は新しいSessionを作り、`memberKey`で対象を特定する。
+- `src/presentation/tracking/record-order.ts`で直近5件の選択と並行作業の表示順を扱い、`src/presentation/history/week-days.ts`で日ごとの記録を昇順にする。`work.members`の先頭は主作業と互換メモに関わるため、保存配列を並べ替えない。
+- メンバーの開始が省略された旧記録は`getWorkEntryTimeRange`の区間から推定し、不明なら末尾に置く。同時刻は元の相対順を保つ。
+- 作業順は不変のTrackingSessionごとにWeakMapで再利用する。メモや時刻の更新は新しいTrackingSessionを作り、`getWorkEntryId`で対象を特定する。
 
 作業メモは`MemoCell`で全文表示する。CSSの内容による高さ調整が使えないブラウザでは、本文とResizeObserverの横幅変化に追従する。フォーカス時の左右余白や日別メモの開閉でも折り返し分を表示する。

@@ -1,13 +1,19 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
-import { readDailyNote, writeDailyNote, readAllDailyNotes } from "../lib/daily-note-server";
-import { emptyDailyNote, type DailyNote, type NoteWrite } from "../lib/daily-note";
-import { DailyNotesStore, NoteConflictError, type NoteTransport } from "../lib/daily-notes-store";
-import { noteWriteSchema } from "../lib/daily-note-validation";
-import { planImport } from "../lib/records";
-import type { AppState } from "../lib/model";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import type { AppState } from "../src/application/contracts/app-state";
+import { NoteConflictError } from "../src/application/errors/note-conflict-error";
+import { type DailyNoteApiClient } from "../src/application/ports/daily-note-api-client";
+import { planImport } from "../src/application/usecases/backup/plan-backup-import";
+import { noteWriteSchema } from "../src/application/validation/daily-note-schema";
+import { emptyDailyNote, type DailyNote, type NoteWrite } from "../src/domain/notes/daily-note";
+import {
+  readAllDailyNotes,
+  readDailyNote,
+  writeDailyNote,
+} from "../src/infrastructure/persistence/d1/daily-note-repository";
+import { DailyNoteStore } from "../src/presentation/notes/daily-note-store";
 const day = "2026-11-01";
 const job = (markdown: string, expectedVersion = 0): NoteWrite => ({
   day,
@@ -62,7 +68,7 @@ function deferred<T>() {
 function remoteTransport(initial = emptyDailyNote(day)) {
   let remote = { ...initial };
   const writes: NoteWrite[] = [];
-  const transport: NoteTransport = {
+  const transport: DailyNoteApiClient = {
     async read() {
       return { ...remote };
     },
@@ -102,7 +108,7 @@ test("日別メモの所有者分離・CAS・同じ保存の再試行・空メ�
     await writeDailyNote(d, "b", job("別ユーザー"));
     await assert.rejects(
       () => writeDailyNote(d, "a", job("古い画面", 0)),
-      (error) => (error as { status: number }).status === 409,
+      (error) => (error as { code: string }).code === "conflict",
     );
     const blank = await writeDailyNote(d, "a", job("", 1));
     assert.equal(blank.version, 2);
@@ -139,7 +145,7 @@ test("取得中に入力しても入力内容を消さず、取得した版か�
   const f = remoteTransport(),
     read = deferred<DailyNote>();
   f.transport.read = () => read.promise;
-  const store = new DailyNotesStore("a", f.transport, memory(), 60000);
+  const store = new DailyNoteStore("a", f.transport, memory(), 60000);
   try {
     const loading = store.load(day);
     store.edit(day, "入力中");
@@ -164,7 +170,7 @@ test("保存中の追加入力は古い応答で戻さず、順番に保存す�
     }
     return original(input);
   };
-  const store = new DailyNotesStore("a", f.transport, memory(), 60000);
+  const store = new DailyNoteStore("a", f.transport, memory(), 60000);
   try {
     await store.load(day);
     store.edit(day, "先");
@@ -195,7 +201,7 @@ test("通信結果不明の再試行では同じmutation ID・本文・版を送
     }
     return original(input);
   };
-  const store = new DailyNotesStore("a", f.transport, memory(), 60000);
+  const store = new DailyNoteStore("a", f.transport, memory(), 60000);
   try {
     await store.load(day);
     store.edit(day, "保存対象");
@@ -210,7 +216,7 @@ test("通信結果不明の再試行では同じmutation ID・本文・版を送
 });
 test("競合時は入力を保持し、明示した場合だけ最新版を上書きする", async () => {
   const f = remoteTransport();
-  const store = new DailyNotesStore("a", f.transport, memory(), 60000);
+  const store = new DailyNoteStore("a", f.transport, memory(), 60000);
   try {
     await store.load(day);
     store.edit(day, "自分の下書き");
@@ -229,13 +235,13 @@ test("競合時は入力を保持し、明示した場合だけ最新版を上�
 test("下書きを再読込しても別ユーザーに混ざらず、サーバーの変更を検知する", async () => {
   const f = remoteTransport(),
     storage = memory(),
-    store = new DailyNotesStore("a", f.transport, storage, 60000);
+    store = new DailyNoteStore("a", f.transport, storage, 60000);
   await store.load(day);
   store.edit(day, "復元する下書き");
   store.dispose();
   f.remote = { day, markdown: "他端末", version: 1, updatedAt: 1 };
-  const restored = new DailyNotesStore("a", f.transport, storage, 60000),
-    other = new DailyNotesStore("b", f.transport, storage, 60000);
+  const restored = new DailyNoteStore("a", f.transport, storage, 60000),
+    other = new DailyNoteStore("b", f.transport, storage, 60000);
   try {
     assert.equal(restored.getSnapshot(day).markdown, "復元する下書き");
     assert.equal(other.getSnapshot(day).markdown, "");
@@ -251,7 +257,7 @@ test("下書きを再読込しても別ユーザーに混ざらず、サーバ�
 });
 test("日付を切り替え・閉じても元の日付の保存が完了する", async () => {
   const rows = new Map<string, DailyNote>();
-  const transport: NoteTransport = {
+  const transport: DailyNoteApiClient = {
     async read(day) {
       return rows.get(day) ?? emptyDailyNote(day);
     },
@@ -261,7 +267,7 @@ test("日付を切り替え・閉じても元の日付の保存が完了する",
       return saved;
     },
   };
-  const store = new DailyNotesStore("a", transport, memory(), 60000);
+  const store = new DailyNoteStore("a", transport, memory(), 60000);
   try {
     await store.load(day);
     store.edit(day, "前日");
@@ -330,7 +336,7 @@ test("Markdown原文を残してブロックへ移行し、再試行と旧クラ
     assert.deepEqual(await writeDailyNote(d, "a", input), saved);
     await assert.rejects(
       () => writeDailyNote(d, "a", job("古いエディター", saved.version)),
-      (e) => (e as { status: number }).status === 409,
+      (e) => (e as { code: string }).code === "conflict",
     );
     await assert.rejects(
       () =>
@@ -338,7 +344,7 @@ test("Markdown原文を残してブロックへ移行し、再試行と旧クラ
           ...input,
           document: { ...document, blocks: [{ ...document.blocks[0], props: { level: 2 } }] },
         }),
-      (e) => (e as { status: number }).status === 409,
+      (e) => (e as { code: string }).code === "conflict",
     );
     const exported = (await readAllDailyNotes(d, "a"))[0];
     assert.equal(exported.originalMarkdown, original);
@@ -353,7 +359,7 @@ test("Markdownが同じでも構造の変更を保存し、下書きと送信中
     gate = deferred<void>();
   let first = true;
   const writes: NoteWrite[] = [];
-  const transport: NoteTransport = {
+  const transport: DailyNoteApiClient = {
     async read(d) {
       return emptyDailyNote(d);
     },
@@ -385,7 +391,7 @@ test("Markdownが同じでも構造の変更を保存し、下書きと送信中
       },
     ],
   });
-  const store = new DailyNotesStore("block", transport, disk, 60000);
+  const store = new DailyNoteStore("block", transport, disk, 60000);
   try {
     await store.load(day);
     store.edit(day, "同じ本文", doc(1));
@@ -397,7 +403,7 @@ test("Markdownが同じでも構造の変更を保存し、下書きと送信中
     assert.deepEqual(writes[1].document, doc(2));
     store.edit(day, "下書き", doc(2));
     store.persistAll();
-    const restored = new DailyNotesStore("block", transport, disk, 60000);
+    const restored = new DailyNoteStore("block", transport, disk, 60000);
     try {
       assert.deepEqual(restored.getSnapshot(day).document, doc(2));
       assert.equal(restored.getSnapshot(day).markdown, "下書き");
@@ -496,7 +502,7 @@ test("未保存の旧ブラウザ下書きは原文を先に保存してから�
     `punch-in:daily-note:a:${day}`,
     JSON.stringify({ markdown: raw, base: "", version: 0 }),
   );
-  const store = new DailyNotesStore(
+  const store = new DailyNoteStore(
     "a",
     {
       read: (date) => readDailyNote(d, "a", date),
@@ -533,7 +539,7 @@ test("復元した旧構造下書きには自動テンプレートの初期化�
     JSON.stringify({ format: 3, markdown: raw, base, version: 0 }),
   );
   let initialize: unknown;
-  const store = new DailyNotesStore(
+  const store = new DailyNoteStore(
     "a",
     {
       read: async (date, _version, init) => {
@@ -563,7 +569,7 @@ test("復元した旧構造下書きには自動テンプレートの初期化�
 test("本文保存で既存テンプレート情報が返っても保存を繰り返さない", async () => {
   let writes = 0;
   const template = { id: crypto.randomUUID(), fingerprint: "a".repeat(64) },
-    store = new DailyNotesStore(
+    store = new DailyNoteStore(
       "a",
       {
         read: async () => ({ day, markdown: "old", version: 1, updatedAt: 1 }),
@@ -589,7 +595,7 @@ test("本文保存で既存テンプレート情報が返っても保存を繰�
 
 test("メモ取得の一時エラーは304の再確認で保存済みに戻り本文を保持する", async () => {
   const f = remoteTransport({ day, markdown: "保存した本文", version: 3, updatedAt: 1 }),
-    store = new DailyNotesStore("recovery", f.transport, memory(), 60000);
+    store = new DailyNoteStore("recovery", f.transport, memory(), 60000);
   try {
     await store.load(day);
     f.transport.read = async () => {
@@ -614,7 +620,7 @@ test("メモ取得の一時エラーは304の再確認で保存済みに戻り�
 
 test("304の応答待ちに入力したメモを保存済みと表示しない", async () => {
   const f = remoteTransport(),
-    store = new DailyNotesStore("recovery-draft", f.transport, memory(), 60000),
+    store = new DailyNoteStore("recovery-draft", f.transport, memory(), 60000),
     read = deferred<DailyNote | null>();
   try {
     await store.load(day);

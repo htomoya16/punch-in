@@ -1,0 +1,156 @@
+/* Short, one-shot feedback; the clock and elapsed time stay still. */
+
+.punch-buttons.single-button {
+  grid-template-columns: var(--punch-diameter);
+  justify-content: center;
+}
+
+.punch-buttons.single-button .punch-add {
+  right: calc(50% - 12px);
+}
+
+.workspace-primary {
+  animation: panel-in 180ms ease-out both;
+}
+
+.icon-button,
+.primary-button,
+.outline-button,
+.subtle-button,
+.segmented button,
+.punch-add {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+.punch-button {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 140ms ease;
+}
+
+.punch-button:active {
+  transform: scale(0.975);
+}
+
+.current-state {
+  transition: color 160ms ease;
+}
+
+.modal[open] {
+  animation: dialog-in 160ms ease-out both;
+}
+
+.modal::backdrop,
+.sidebar-backdrop {
+  animation: fade-in 140ms ease-out both;
+}
+
+.toast {
+  animation: toast-in 180ms ease-out both;
+}
+
+.chart-stack > span {
+  transform-origin: bottom;
+  animation: bar-in 220ms ease-out both;
+}
+
+.summary-track > span {
+  transform-origin: left;
+  animation: summary-in 200ms ease-out both;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes bar-in {
+  from {
+    transform: scaleY(0.96);
+    opacity: 0.35;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes summary-in {
+  from {
+    transform: scaleX(0.96);
+    opacity: 0.35;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .punch-button:hover,
+  .punch-button:active {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal::backdrop {
+    animation: none !important;
+  }
+}
+
+.brand-mark {
+  background: #000;
+  overflow: hidden;
+}
+
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

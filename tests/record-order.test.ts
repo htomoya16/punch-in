@@ -1,13 +1,18 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import type { Session } from "../lib/model";
-import { chronologicalMembers, latestSessionsChronologically } from "../lib/record-order";
-import { weekDays } from "../lib/history-week";
-import { controlWork, memberKey, setMemo, memoKey } from "../lib/work";
-import { editWorkTime } from "../lib/work-time";
+import test from "node:test";
+import { editWorkTime } from "../src/domain/tracking/edit-work-entry-time";
+import type { TrackingSession } from "../src/domain/tracking/tracking-session";
+import { applyTrackingCommand } from "../src/domain/tracking/tracking-transitions";
+import { getWorkEntryId } from "../src/domain/tracking/work-entry";
+import { getWorkEntryMemoKey, updateWorkEntryMemo } from "../src/domain/tracking/work-entry-memo";
+import { weekDays } from "../src/presentation/history/week-days";
+import {
+  chronologicalMembers,
+  latestSessionsChronologically,
+} from "../src/presentation/tracking/record-order";
 const at = Date.parse("2026-11-05T23:00:00+09:00"),
   minute = 60000;
-const base: Session = {
+const base: TrackingSession = {
   id: "parent",
   categoryId: "a",
   memo: "A",
@@ -19,7 +24,7 @@ const base: Session = {
   createdAt: at,
   updatedAt: at,
 };
-const record = (id: string, start: number): Session => ({
+const record = (id: string, start: number): TrackingSession => ({
   ...base,
   id,
   startedAt: start,
@@ -70,28 +75,33 @@ test("履歴は同じ日の開始を昇順にし、同時刻の従来のID順は
   );
 });
 test("並行記録の時刻修正が並びに反映され、元の主作業とメモを変えない", () => {
-  const group = controlWork(
-    controlWork(base, "join", "b", at + 10 * minute),
+  const group = applyTrackingCommand(
+    applyTrackingCommand(base, "join", "b", at + 10 * minute),
     "end",
     "",
     at + 60 * minute,
   );
   const edited = editWorkTime(group, "b", at - 10 * minute, at + 60 * minute, at + 120 * minute),
     before = JSON.stringify(edited);
-  assert.deepEqual(chronologicalMembers(edited).map(memberKey), ["b", "a"]);
+  assert.deepEqual(chronologicalMembers(edited).map(getWorkEntryId), ["b", "a"]);
   assert.equal(edited.work!.members[0].categoryId, "a");
   assert.equal(edited.memo, "A");
   assert.equal(JSON.stringify(edited), before);
   assert.equal(chronologicalMembers(edited), chronologicalMembers(edited));
-  const saved = setMemo(edited, memoKey(edited, "b"), "B note");
+  const saved = updateWorkEntryMemo(edited, getWorkEntryMemoKey(edited, "b"), "B note");
   assert.equal(chronologicalMembers(saved)[0].memo, "B note");
   assert.equal(saved.memo, "A");
 });
 test("同時に始めた作業の並びを維持し、旧記録では参加区間の開始を使う", () => {
-  const group = controlWork(controlWork(base, "join", "b", at), "end", "", at + minute);
+  const group = applyTrackingCommand(
+    applyTrackingCommand(base, "join", "b", at),
+    "end",
+    "",
+    at + minute,
+  );
   group.work!.members.reverse();
-  assert.deepEqual(chronologicalMembers(group).map(memberKey), ["b", "a"]);
-  const legacy: Session = {
+  assert.deepEqual(chronologicalMembers(group).map(getWorkEntryId), ["b", "a"]);
+  const legacy: TrackingSession = {
     ...base,
     work: {
       version: 1,
@@ -106,10 +116,10 @@ test("同時に始めた作業の並びを維持し、旧記録では参加区�
       ],
     },
   };
-  assert.deepEqual(chronologicalMembers(legacy).map(memberKey), ["b", "a"]);
+  assert.deepEqual(chronologicalMembers(legacy).map(getWorkEntryId), ["b", "a"]);
 });
 test("同じ作業の再打刻も別IDのまま時系列に並び、開始不明の旧記録は末尾に置く", () => {
-  const group: Session = {
+  const group: TrackingSession = {
     ...base,
     work: {
       version: 1,
@@ -138,7 +148,7 @@ test("同じ作業の再打刻も別IDのまま時系列に並び、開始不明
     },
   };
   assert.deepEqual(
-    chronologicalMembers(group).map((m) => [memberKey(m), m.memo]),
+    chronologicalMembers(group).map((m) => [getWorkEntryId(m), m.memo]),
     [
       ["a", "first"],
       ["a-two", "second"],

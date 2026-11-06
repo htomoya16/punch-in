@@ -1,8 +1,12 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
+import { writeDailyNote } from "../src/infrastructure/persistence/d1/daily-note-repository";
+import {
+  mutateTemplate,
+  readTemplates,
+} from "../src/infrastructure/persistence/d1/note-template-repository";
 import { fixture } from "./d1-fixture";
-import { mutateTemplate, initializeDailyNote, readTemplates } from "../lib/note-template-server";
-import { writeDailyNote } from "../lib/daily-note-server";
+import { initializeDailyNote } from "./support/note-usecases";
 const user = "owner";
 const document = {
   format: "blocknote" as const,

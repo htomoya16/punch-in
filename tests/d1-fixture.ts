@@ -1,5 +1,5 @@
-import { DatabaseSync } from "node:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 export function fixture() {
   const sqlite = new DatabaseSync(":memory:");
   for (const file of readdirSync("drizzle")

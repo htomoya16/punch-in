@@ -1,10 +1,14 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
+import { calculateAllocatedDurationsByCategory } from "../src/domain/tracking/duration-allocation";
+import { getWorkEntryTimeRange } from "../src/domain/tracking/work-entry-intervals";
+import { writeSessionMemo } from "../src/infrastructure/persistence/d1/work-entry-memo-repository";
 import { fixture } from "./d1-fixture";
-import { performPunch, sessionFromRow } from "../lib/punch-server";
-import { performWork } from "../lib/work-server";
-import { writeSessionMemo } from "../lib/session-memo-server";
-import { allocations, memberRange } from "../lib/work";
+import {
+  mapTrackingSessionRow,
+  persistPunch,
+  persistTrackingCommand,
+} from "./support/tracking-usecases";
 const at = Date.parse("2026-11-01T01:00:00Z"),
   user = "owner";
 async function setup() {
@@ -12,7 +16,7 @@ async function setup() {
   f.sqlite.exec(
     "INSERT INTO preferences(user_id,seeded)VALUES('owner',2);INSERT INTO categories(user_id,id,name,color)VALUES('owner','a','A','#000000'),('owner','b','B','#000000')",
   );
-  const first = await performPunch(
+  const first = await persistPunch(
     f.db,
     user,
     { payload: { categoryId: "a" }, expectedRevision: 0, mutationId: crypto.randomUUID() },
@@ -27,7 +31,7 @@ async function work(
   extra = {},
 ) {
   const revision = Number(f.sqlite.prepare("SELECT revision FROM preferences").get()!.revision);
-  return performWork(
+  return persistTrackingCommand(
     f.db,
     user,
     {
@@ -49,13 +53,13 @@ test("並行追加・メモ・一時停止は永続化し所有者だけ操作�
       expectedMemo: "",
     });
     await work(f, "pause", "a");
-    const s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    const s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
     assert.equal(s.work!.members[1].memo, "B note");
     assert.equal(s.work!.members[0].state, "paused");
     assert.equal(s.endedAt, null);
     await assert.rejects(
       () =>
-        performWork(
+        persistTrackingCommand(
           f.db,
           "other",
           {
@@ -84,7 +88,8 @@ test("構造更新の直前に保存された作業メモも原子的に保持�
     });
     await work(f, "pause", "a");
     assert.equal(
-      sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!).work!.members[1].memo,
+      mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!).work!.members[1]
+        .memo,
       "concurrent",
     );
   } finally {
@@ -117,7 +122,7 @@ test("作業メモCAS競合は他の作業メモを上書きしない", async ()
         }),
       /別の画面/,
     );
-    const s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    const s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
     assert.deepEqual(
       s.work!.members.map((m) => m.memo),
       ["A note", "B note"],
@@ -133,10 +138,10 @@ test("手動時間は独立して保存し共通の開始終了を変えない",
     await work(f, "join", "b");
     await work(f, "end");
     await work(f, "allocate", undefined, { mode: "manual", values: { a: 3600000, b: 2700000 } });
-    const s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    const s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
     assert.equal(s.startedAt, at);
     assert.equal(s.endedAt, at + 1200000);
-    assert.deepEqual([...allocations(s, 0).values()], [3600000, 2700000]);
+    assert.deepEqual([...calculateAllocatedDurationsByCategory(s, 0).values()], [3600000, 2700000]);
   } finally {
     f.sqlite.close();
   }
@@ -145,14 +150,14 @@ test("並行記録の通常打刻は対象だけ終了し、最後で親を終�
   const f = await setup();
   try {
     await work(f, "join", "b");
-    await performPunch(
+    await persistPunch(
       f.db,
       user,
       { payload: { categoryId: "a" }, expectedRevision: 2, mutationId: crypto.randomUUID() },
       at + 1300000,
     );
     assert.equal(f.sqlite.prepare("SELECT ended_at FROM sessions").get()!.ended_at, null);
-    await performPunch(
+    await persistPunch(
       f.db,
       user,
       { payload: { categoryId: "b" }, expectedRevision: 3, mutationId: crypto.randomUUID() },
@@ -176,18 +181,18 @@ test("先頭作業だけ削除しても残るメモと主カテゴリを保持�
     });
     await work(f, "end");
     await work(f, "remove", "a");
-    let s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    let s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
     assert.equal(s.categoryId, "b");
     assert.equal(s.memo, "keep");
     assert.equal(s.work!.members.length, 1);
-    assert.equal(allocations(s, 0).get("b"), 0);
+    assert.equal(calculateAllocatedDurationsByCategory(s, 0).get("b"), 0);
     await writeSessionMemo(f.db, user, {
       id: f.id,
       categoryId: "b",
       memo: "after shift",
       expectedMemo: "keep",
     });
-    s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
     assert.equal(s.work!.members[0].memo, "after shift");
     assert.equal(s.memo, "after shift");
   } finally {
@@ -206,7 +211,7 @@ test("削除直前に別端末が保存した残るメモを巻き戻さない",
           .run();
     });
     await work(f, "remove", "a");
-    const s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    const s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
     assert.equal(s.memo, "fresh");
     assert.equal(s.work!.members[0].memo, "fresh");
   } finally {
@@ -217,7 +222,7 @@ test("一時停止後の終了時刻は最後の計測区間の終端にそろ�
   const f = await setup();
   try {
     await work(f, "pause", "a");
-    await performWork(
+    await persistTrackingCommand(
       f.db,
       user,
       {
@@ -227,8 +232,8 @@ test("一時停止後の終了時刻は最後の計測区間の終端にそろ�
       },
       at + 3600000,
     );
-    const s = sessionFromRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
-    assert.equal(memberRange(s, "a").end, at + 1200000);
+    const s = mapTrackingSessionRow(f.sqlite.prepare("SELECT * FROM sessions").get()!);
+    assert.equal(getWorkEntryTimeRange(s, "a").end, at + 1200000);
     assert.equal(s.endedAt, at + 1200000);
     assert.equal(s.work!.intervals[0].end, at + 1200000);
   } finally {

@@ -1,10 +1,15 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
-import { performPunch } from "../lib/punch-server";
-import { applyPunchDelta, completedTotal, projectPunch } from "../lib/punch-state";
-import type { AppState, PendingPunch, PunchDelta, Session } from "../lib/model";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import type { AppState, PendingPunch, PunchDelta } from "../src/application/contracts/app-state";
+import type { TrackingSession } from "../src/domain/tracking/tracking-session";
+import {
+  applyPunchDelta,
+  completedTotal,
+  projectPunch,
+} from "../src/presentation/state/tracking-projection";
+import { persistPunch } from "./support/tracking-usecases";
 const user = "fast-punch-test",
   at = Date.parse("2026-11-01T03:00:00Z");
 const state: AppState = {
@@ -24,7 +29,7 @@ const state: AppState = {
   serverNow: at,
 };
 const pending: PendingPunch = { categoryId: "punch", mutationId: "test", baseRevision: 0, at };
-function record(id: string, startedAt = at, endedAt: number | null = null): Session {
+function record(id: string, startedAt = at, endedAt: number | null = null): TrackingSession {
   return {
     id,
     categoryId: "punch",
@@ -145,7 +150,7 @@ test("確定時間の集計に計測中の時間を二重加算しない", () =>
 test("打刻は履歴全体を読まず2回のDBバッチで確定し、受信時刻を使う", async () => {
   const f = database();
   try {
-    const result = await performPunch(f.d, user, input(), at);
+    const result = await persistPunch(f.d, user, input(), at);
     assert.ok(result);
     assert.equal(result.sessions[0].startedAt, at);
     assert.equal(result.revision, 1);
@@ -162,10 +167,10 @@ test("打刻は履歴全体を読まず2回のDBバッチで確定し、受信�
 test("開始・ボタンによる並行追加・個別終了と再試行の冪等性", async () => {
   const f = database();
   try {
-    const first = await performPunch(f.d, user, input(), at);
+    const first = await persistPunch(f.d, user, input(), at);
     assert.ok(first);
     const nextInput = input(1, "other");
-    const next = await performPunch(f.d, user, nextInput, at + 1000);
+    const next = await persistPunch(f.d, user, nextInput, at + 1000);
     assert.ok(next);
     assert.equal(next.sessions.length, 1);
     assert.equal(next.sessions[0].id, first.sessions[0].id);
@@ -174,12 +179,12 @@ test("開始・ボタンによる並行追加・個別終了と再試行の冪�
       next.sessions[0].work!.members.map((m) => m.categoryId),
       ["punch", "other"],
     );
-    assert.equal(await performPunch(f.d, user, nextInput, at + 2000), null);
-    const stop = await performPunch(f.d, user, input(2, "other"), at + 3000);
+    assert.equal(await persistPunch(f.d, user, nextInput, at + 2000), null);
+    const stop = await persistPunch(f.d, user, input(2, "other"), at + 3000);
     assert.ok(stop);
     assert.equal(stop.sessions[0].endedAt, null);
     assert.equal(stop.sessions[0].work!.members[1].endedAt, at + 3000);
-    await performPunch(f.d, user, input(3), at + 4000);
+    await persistPunch(f.d, user, input(3), at + 4000);
     assert.equal(
       f.sqlite.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NULL").get()?.n,
       0,
@@ -193,7 +198,7 @@ test("途中で競合しても打刻を部分保存しない", async () => {
     if (n === 2) d.exec("UPDATE preferences SET revision=1,mutation_token='other-device'");
   });
   try {
-    await assert.rejects(() => performPunch(f.d, user, input(), at), /別の画面/);
+    await assert.rejects(() => persistPunch(f.d, user, input(), at), /別の画面/);
     assert.equal(f.sqlite.prepare("SELECT COUNT(*) AS n FROM sessions").get()?.n, 0);
   } finally {
     f.sqlite.close();
@@ -203,8 +208,8 @@ test("アーカイブした項目・他人の項目には打刻できない", as
   const f = database();
   try {
     f.sqlite.exec("UPDATE categories SET archived=1 WHERE id='punch'");
-    await assert.rejects(() => performPunch(f.d, user, input(), at), /見つかりません/);
-    await assert.rejects(() => performPunch(f.d, "unknown", input(), at), /再読み込み/);
+    await assert.rejects(() => persistPunch(f.d, user, input(), at), /見つかりません/);
+    await assert.rejects(() => persistPunch(f.d, "unknown", input(), at), /再読み込み/);
   } finally {
     f.sqlite.close();
   }
@@ -212,8 +217,8 @@ test("アーカイブした項目・他人の項目には打刻できない", as
 test("サーバー時刻のずれがあっても既存区間に重ねない", async () => {
   const f = database();
   try {
-    await performPunch(f.d, user, input(), at);
-    const result = await performPunch(f.d, user, input(1), at - 1000);
+    await persistPunch(f.d, user, input(), at);
+    const result = await persistPunch(f.d, user, input(1), at - 1000);
     assert.ok(result);
     assert.equal(result.sessions[0].endedAt, at);
   } finally {
@@ -224,7 +229,7 @@ test("サーバー時刻のずれがあっても既存区間に重ねない", as
 test("通信が遅れても調整済みの押下時刻を記録する", async () => {
   const f = database();
   try {
-    const result = await performPunch(f.d, user, { ...input(), pressedAt: at - 1500 }, at);
+    const result = await persistPunch(f.d, user, { ...input(), pressedAt: at - 1500 }, at);
     assert.equal(result?.sessions[0].startedAt, at - 1500);
   } finally {
     f.sqlite.close();
@@ -234,7 +239,7 @@ test("不正・古すぎる端末時刻にはサーバー受信時刻を使う",
   for (const pressedAt of [at - 60001, at + 2001]) {
     const f = database();
     try {
-      const result = await performPunch(f.d, user, { ...input(), pressedAt }, at);
+      const result = await persistPunch(f.d, user, { ...input(), pressedAt }, at);
       assert.equal(result?.sessions[0].startedAt, at);
     } finally {
       f.sqlite.close();
@@ -246,7 +251,7 @@ test("日の区切りをまたいで届いても押下した日へ計上する",
   try {
     const pressedAt = Date.parse("2026-11-02T04:59:59+09:00"),
       receivedAt = Date.parse("2026-11-02T05:00:01+09:00");
-    const result = await performPunch(f.d, user, { ...input(), pressedAt }, receivedAt);
+    const result = await persistPunch(f.d, user, { ...input(), pressedAt }, receivedAt);
     assert.equal(result?.sessions[0].businessDay, "2026-11-01");
   } finally {
     f.sqlite.close();
@@ -267,7 +272,7 @@ test("打刻差分が遅れても先に保存したメモを巻き戻さない",
 
 test("並行数の上限を超えても仮表示で画面を壊さず確定状態を保つ", () => {
   const ids = Array.from({ length: 50 }, (_, i) => (i ? "work-" + i : "punch"));
-  const s: Session = {
+  const s: TrackingSession = {
     ...record("running"),
     work: {
       version: 1,

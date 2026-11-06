@@ -1,7 +1,7 @@
 // Vendored from @openai/sites-vite-plugin 0.2.0 (openai/sites#9).
 // See sites-vite-plugin.LICENSE for the upstream MIT license.
-import { access, cp, mkdir, rm } from "node:fs/promises";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import { access,cp,mkdir,rm } from "node:fs/promises";
+import type { IncomingMessage,ServerResponse } from "node:http";
 import { resolve } from "node:path";
 import type { Plugin } from "vite";
 

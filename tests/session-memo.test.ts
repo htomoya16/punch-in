@@ -1,13 +1,15 @@
-import { historyDays } from "../lib/history";
-import test from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
-import { writeSessionMemo, sessionMemoSchema, type MemoWrite } from "../lib/session-memo-server";
-import { SessionMemosStore, MemoConflictError } from "../lib/session-memos-store";
-import { performPunch } from "../lib/punch-server";
-import { buildStatsBuckets, bucketTimes, sumTimes } from "../lib/stats";
-import type { Session } from "../lib/model";
+import { DatabaseSync } from "node:sqlite";
+import test from "node:test";
+import { sessionMemoSchema, type MemoWrite } from "../src/application/contracts/work-entry-memo";
+import { MemoConflictError } from "../src/application/errors/memo-conflict-error";
+import { bucketTimes, buildStatsBuckets, sumTimes } from "../src/domain/tracking/statistics";
+import type { TrackingSession } from "../src/domain/tracking/tracking-session";
+import { writeSessionMemo } from "../src/infrastructure/persistence/d1/work-entry-memo-repository";
+import { historyDays } from "../src/presentation/history/history-days";
+import { WorkEntryMemoStore } from "../src/presentation/tracking/work-entry-memo-store";
+import { persistPunch } from "./support/tracking-usecases";
 function database() {
   const sqlite = new DatabaseSync(":memory:");
   for (const f of readdirSync("drizzle")
@@ -99,7 +101,7 @@ test("メモだけのCAS保存・再試行・他人との分離・時刻維持",
     );
     await assert.rejects(
       () => writeSessionMemo(f.d, "a", write("古い画面")),
-      (e) => (e as { status: number }).status === 409,
+      (e) => (e as { code: string }).code === "conflict",
     );
     assert.equal(f.sqlite.prepare("SELECT memo FROM sessions WHERE user_id='b'").get()?.memo, "");
     assert.deepEqual(
@@ -112,7 +114,7 @@ test("メモだけのCAS保存・再試行・他人との分離・時刻維持",
     );
     await assert.rejects(
       () => writeSessionMemo(f.d, "unknown", write("秘密")),
-      (e) => (e as { status: number }).status === 404,
+      (e) => (e as { code: string }).code === "not_found",
     );
   } finally {
     f.sqlite.close();
@@ -122,7 +124,7 @@ test("メモ保存直後も同じ打刻revisionで開始できる", async () => 
   const f = database();
   try {
     await writeSessionMemo(f.d, "a", write("並行保存"));
-    const delta = await performPunch(
+    const delta = await persistPunch(
       f.d,
       "a",
       { payload: { categoryId: "punch" }, expectedRevision: 0, mutationId: crypto.randomUUID() },
@@ -145,7 +147,7 @@ test("保存中の追加入力を古い応答で戻さない", async () => {
   const gate = deferred<void>(),
     writes: MemoWrite[] = [];
   let first = true;
-  const store = new SessionMemosStore(
+  const store = new WorkEntryMemoStore(
     "a",
     async (job) => {
       writes.push({ ...job });
@@ -178,7 +180,7 @@ test("保存中の追加入力を古い応答で戻さない", async () => {
 test("応答不明でも同じ保存を再送し、続きの本文を後から保存する", async () => {
   const attempts: MemoWrite[] = [];
   let fail = true;
-  const store = new SessionMemosStore(
+  const store = new WorkEntryMemoStore(
     "a",
     async (job) => {
       attempts.push({ ...job });
@@ -206,7 +208,7 @@ test("応答不明でも同じ保存を再送し、続きの本文を後から�
 });
 test("競合時は下書きを残し、選択した場合だけ上書きする", async () => {
   let remote = "他の画面";
-  const store = new SessionMemosStore(
+  const store = new WorkEntryMemoStore(
     "a",
     async (job) => {
       if (job.expectedMemo !== remote) throw new MemoConflictError(remote);
@@ -233,12 +235,12 @@ test("競合時は下書きを残し、選択した場合だけ上書きする",
 test("下書きは日付移動・再読込に耐え、ユーザー別に分かれる", async () => {
   const disk = storage(),
     transport = async (job: MemoWrite) => ({ id: job.id, memo: job.memo });
-  const old = new SessionMemosStore("a", transport, () => {}, disk, 60000);
+  const old = new WorkEntryMemoStore("a", transport, () => {}, disk, 60000);
   old.observe("one", "");
   old.edit("one", "復元");
   old.dispose();
-  const next = new SessionMemosStore("a", transport, () => {}, disk, 60000),
-    other = new SessionMemosStore("b", transport, () => {}, disk, 60000);
+  const next = new WorkEntryMemoStore("a", transport, () => {}, disk, 60000),
+    other = new WorkEntryMemoStore("b", transport, () => {}, disk, 60000);
   try {
     assert.equal(next.getSnapshot("one").memo, "復元");
     assert.equal(other.getSnapshot("one").memo, "");
@@ -248,7 +250,13 @@ test("下書きは日付移動・再読込に耐え、ユーザー別に分か�
     other.dispose();
   }
 });
-function record(id: string, day: string, start: number, end: number | null, memo = ""): Session {
+function record(
+  id: string,
+  day: string,
+  start: number,
+  end: number | null,
+  memo = "",
+): TrackingSession {
   return {
     id,
     categoryId: "punch",
@@ -288,7 +296,7 @@ test("月のドリルダウンはうるう年を含む月初〜月末、計測�
 test("遅れて返るメモ保存より新しい確定内容を優先する", async () => {
   let first = true;
   const writes: MemoWrite[] = [];
-  const store = new SessionMemosStore(
+  const store = new WorkEntryMemoStore(
     "a",
     async (job) => {
       writes.push({ ...job });
@@ -319,7 +327,7 @@ test("遅れて返るメモ保存より新しい確定内容を優先する", as
 test("削除済み記録の下書きと保存予約を片付け、再読込で復元しない", async () => {
   const disk = storage();
   let writes = 0;
-  const store = new SessionMemosStore(
+  const store = new WorkEntryMemoStore(
     "a",
     async (job) => {
       writes++;
@@ -339,7 +347,7 @@ test("削除済み記録の下書きと保存予約を片付け、再読込で�
     assert.equal(store.hasUnsaved(), false);
     await new Promise((r) => setTimeout(r, 40));
     assert.equal(writes, 1);
-    const next = new SessionMemosStore(
+    const next = new WorkEntryMemoStore(
       "a",
       async (job) => ({ id: job.id, memo: job.memo }),
       () => {},
@@ -383,7 +391,7 @@ test("並行メモの下書き復元は区切り文字を含むIDも正しい対
   const disk = storage(),
     target = { id: "parent::one", categoryId: "category::two" },
     key = "work:" + JSON.stringify([target.id, target.categoryId]);
-  const first = new SessionMemosStore(
+  const first = new WorkEntryMemoStore(
     "scope",
     async () => {
       throw new Error("offline");
@@ -397,7 +405,7 @@ test("並行メモの下書き復元は区切り文字を含むIDも正しい対
   assert.equal(await first.flush(key), false);
   first.dispose();
   let written: MemoWrite | undefined;
-  const second = new SessionMemosStore(
+  const second = new WorkEntryMemoStore(
     "scope",
     async (input) => {
       written = input;

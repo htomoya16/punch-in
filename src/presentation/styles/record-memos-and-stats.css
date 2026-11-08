@@ -24,7 +24,6 @@
   field-sizing: content;
   resize: none;
   border: 0;
-  border-bottom: 1px solid #e4e9ee;
   border-radius: 0;
   padding: 7px 20px 7px 0;
   background: transparent;
@@ -110,7 +109,6 @@
 .stats-detail-table th,
 .stats-detail-table td {
   padding: 12px 15px;
-  border-bottom: 1px solid #e9edf1;
 }
 
 .stats-detail-table thead th {
@@ -137,7 +135,6 @@
 .stats-detail-table tfoot td {
   font-weight: 600;
   background: #f8fafb;
-  border-top: 1px solid #dce4eb;
 }
 
 .stats-detail-table .stats-row-total {
@@ -198,7 +195,6 @@
   align-items: flex-start;
   gap: 12px;
   padding: 17px 20px;
-  border-bottom: 1px solid #edf0f3;
   flex-shrink: 0;
 }
 
@@ -225,7 +221,6 @@
 
 .popover-totals {
   padding: 12px 0;
-  border-bottom: 1px solid #edf0f3;
 }
 
 .popover-totals > div {
@@ -253,7 +248,6 @@
 
 .popover-records article {
   padding: 14px 0;
-  border-bottom: 1px solid #edf0f3;
 }
 
 .popover-records article > div {
@@ -298,7 +292,6 @@
 
 .stats-popover footer {
   padding: 10px 20px;
-  border-top: 1px solid #edf0f3;
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
@@ -341,7 +334,6 @@
     grid-template-columns: minmax(60px, 1fr) minmax(60px, 1fr) auto 28px;
     gap: 10px 8px;
     padding: 15px 0;
-    border-bottom: 1px solid #e7edf2;
   }
   .record-table td,
   .record-table td:first-child,
@@ -434,4 +426,17 @@
   .inline-memo textarea {
     transition: none;
   }
+}
+
+.stats-popover.is-inline {
+  position: relative;
+  width: 100%;
+  max-height: 560px;
+  margin: -12px 0 32px;
+  animation: none;
+}
+
+.stats-detail-table tbody tr:nth-child(even) > th,
+.stats-detail-table tbody tr:nth-child(even) > td {
+  background: #f8fafb;
 }

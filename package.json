@@ -22,7 +22,8 @@
     "test:blocks-api": "node tests/block-note-api-test.mjs",
     "format": "prettier --write app src tests db scripts/test.mjs scripts/check-architecture.mjs",
     "format:check": "prettier --check app src tests db scripts/test.mjs scripts/check-architecture.mjs",
-    "check:architecture": "node scripts/check-architecture.mjs"
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "test:profile-api": "node tests/profile-api-test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -30,7 +30,7 @@ flowchart TD
 | `src/application/ports/` | 保存先、時計、ID生成、クライアント通信の契約 |
 | `src/application/contracts/` | リクエスト・応答・バックアップの型と形式 |
 | `src/application/validation/` | 境界で受け取るデータの検証 |
-| `src/infrastructure/` | D1、Sites認証、HTTP、ブラウザ保存、時計・UUIDの実装 |
+| `src/infrastructure/` | D1・R2、Sites認証、HTTP、ブラウザ保存、時計・UUIDの実装 |
 | `src/presentation/` | 機能別の画面・部品・Hookとブラウザ側の状態管理 |
 | `src/bootstrap/` | 使用する実装の選択と依存の組み立て |
 | `src/shared/` | 日時・時間の整形、色など、機能に依存しない処理 |
@@ -89,3 +89,14 @@ CSSは`src/presentation/styles/`へ分割し、`app/globals.css`のimport順で�
 `npm test`は`.test.ts`を自動検出し、登録漏れを防ぐ。UsecaseはPortのテスト実装と固定の時計・IDで検証できる。D1互換のSQLiteテストで一括保存・競合・最新メモ保持も検証する。
 
 CIは整形、依存境界、型、単体テスト、ビルドを確認する。ブラウザ操作とローカルWorkerのAPI検証は別途行う。API検証には実際の個人データや本番URLを使わない。
+
+
+## プロフィールと共通メモ
+
+`src/application/usecases/profile/`がプロフィールの保存・画像置換を調整する。`ProfileRepository`はD1の`user_profiles`、`AvatarStorage`は非公開のR2へ接続する。0007はプロフィールの表を追加するだけで、既存の記録やメモを書き換えない。表示名・画像はログインしたユーザーIDで分離し、ChatGPT側のプロフィールを変更しない。現在のSites認証契約に画像は含まれないため、未設定時は名前の頭文字を表示する。
+
+画像はブラウザで256px四方へ切り抜き、再エンコードしてから送る。サーバーではサイズとラスタ形式を検証する。R2保存後にD1をCASで確定し、失敗時は新しい画像、成功時は置き換え前の画像を片付ける。片付けだけの失敗は確定済みの保存を失敗扱いにしない。
+
+日別メモの選択と開閉は画面の種類から独立する。共通ヘッダーの開閉とパネルの日付選択を使い、通常の画面移動では日付・Store・エディターを保持する。日付変更時には既存の保存キューで前の日付を確定する。グラフの詳細が開いている間、Escapeは詳細を閉じ、メモまで同時に閉じない。
+
+集計は`chart-scale.ts`で時間と目盛りを合わせる。`detail-placement.ts`は選択した列と交差しない配置を選び、置き場がなければグラフ直下へ表示する。装飾目的の横の区切り線は余白・控えめな背景へ置き換え、グラフ・タイムラインの時間を読む線は維持する。

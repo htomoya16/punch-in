@@ -1,6 +1,5 @@
 "use client";
 
-import { Pencil } from "lucide-react";
 import { lazy, Suspense, useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AppState } from "../../application/contracts/app-state";
 import type { Backup } from "../../application/contracts/backup";
@@ -9,6 +8,7 @@ import { formatHistoryCsv } from "../../application/export/history-csv";
 import { formatStatisticsCsv } from "../../application/export/statistics-csv";
 import type { WorkCategory } from "../../domain/categories/work-category";
 import type { UserPreferences } from "../../domain/settings/user-preferences";
+import type { UserProfile } from "../../domain/profile/user-profile";
 import type { TrackingSession } from "../../domain/tracking/tracking-session";
 import {
   findLatestWorkEntry,
@@ -26,6 +26,8 @@ import { HistoryRecords } from "../history/history-records";
 import { HistoryToolbar } from "../history/history-toolbar";
 import { useHistorySelection } from "../history/use-history-selection";
 import { useDailyNotePanel } from "../notes/use-daily-note-panel";
+import { ProfileEditor } from "../profile/profile-editor";
+import { useProfile } from "../profile/use-profile";
 import { SettingsScreen } from "../settings/settings-screen";
 import { useAppSynchronization } from "../state/use-app-synchronization";
 import { StatisticsScreen } from "../statistics/statistics-screen";
@@ -47,10 +49,12 @@ export const NotesDock = lazy(() => import("../notes/components/notes-dock"));
 
 export default function PunchInApp({
   initial,
+  initialProfile,
   displayName,
   draftScope,
 }: {
   initial: AppState;
+  initialProfile: UserProfile;
   displayName: string;
   draftScope: string;
 }) {
@@ -71,6 +75,8 @@ export default function PunchInApp({
     forgetSavedMemo,
   } = useAppSynchronization(initial, draftScope);
   const [view, setView] = useState<AppView>("punch");
+  const profile = useProfile(initialProfile);
+  const currentDisplayName = profile.profile.displayName || displayName;
   const { menu, setMenu, compactNavigation, menuButton, sidebarRef, closeMenu } =
     useResponsiveNavigation();
 
@@ -103,7 +109,6 @@ export default function PunchInApp({
   const [filter, setFilter] = useState("");
   const {
     noteTarget,
-    setNoteTarget,
     notesActivated,
     noteError,
     setNoteError,
@@ -114,6 +119,7 @@ export default function PunchInApp({
     notesReady,
     closeNotes,
     openNotes,
+    selectNoteDay,
   } = useDailyNotePanel({ today, view });
 
   function setHistoryDay(day: string) {
@@ -185,11 +191,6 @@ export default function PunchInApp({
       setVisibleHistoryDay(historyFocusDay ?? today);
       setHistoryFocus((v) => v + 1);
     }
-    setNoteTarget((target) => ({
-      ...target,
-      open: target.open && (next === "punch" || next === "history"),
-      ...(next === "punch" ? { day: today } : {}),
-    }));
     setView(next);
     if (next !== view && next !== "history")
       requestAnimationFrame(() =>
@@ -210,7 +211,6 @@ export default function PunchInApp({
     setFilter(categoryId);
     setQuery("");
     setView("history");
-    setNoteTarget((target) => ({ ...target, day: start }));
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
   const editSession = useCallback(
@@ -433,7 +433,13 @@ export default function PunchInApp({
   return (
     <div className={`app ${noteTarget.open ? "notes-open" : ""}`} style={style}>
       <AppHeader
-        displayName={displayName}
+        displayName={currentDisplayName}
+        avatarId={profile.profile.avatarId}
+        openProfile={profile.open}
+        noteButton={noteButton}
+        notesOpen={noteTarget.open}
+        noteError={noteError}
+        toggleNotes={() => (noteTarget.open ? closeNotes() : openNotes(noteTarget.day))}
         closeMenu={closeMenu}
         compactNavigation={compactNavigation}
         go={go}
@@ -457,22 +463,6 @@ export default function PunchInApp({
       <main className="main" inert={compactNavigation && menu}>
         <div className="page-heading">
           <h1>{NAV.find((n) => n.id === view)?.label}</h1>
-          {(view === "punch" || view === "history") && (
-            <button
-              ref={noteButton}
-              className={`text-button notes-toggle ${noteError ? "has-error" : ""}`}
-              aria-controls="daily-notes"
-              aria-expanded={noteTarget.open}
-              onClick={() =>
-                noteTarget.open
-                  ? closeNotes()
-                  : openNotes(view === "punch" ? today : visibleHistoryDay)
-              }
-            >
-              <Pencil size={14} />
-              日別メモ{noteError && <span className="note-error-dot" />}
-            </button>
-          )}
         </div>
         <div className={`page-content ${view === "punch" ? "punch-content" : ""}`}>
           <div key={view} className="workspace-primary">
@@ -582,6 +572,7 @@ export default function PunchInApp({
               <NotesDock
                 scope={draftScope}
                 target={noteTarget}
+                selectDay={selectNoteDay}
                 close={closeNotes}
                 ready={notesReady}
                 reportError={setNoteError}
@@ -628,6 +619,16 @@ export default function PunchInApp({
           )}
         </div>
       </main>
+      {profile.isOpen && (
+        <ProfileEditor
+          profile={profile.profile}
+          fallbackName={displayName}
+          isSaving={profile.isSaving}
+          error={profile.error}
+          save={profile.save}
+          close={profile.close}
+        />
+      )}
       <AppDialogs
         closeConfirm={closeConfirm}
         confirm={confirm}

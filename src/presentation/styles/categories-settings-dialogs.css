@@ -1,14 +1,9 @@
-.category-list {
-  border-top: 1px solid #e8edf0;
-}
-
 .category-row {
   display: flex;
   align-items: center;
   gap: 22px;
   min-height: 103px;
   padding: 20px 10px 20px 0;
-  border-bottom: 1px solid #e8edf0;
 }
 
 .category-row.is-hidden > strong,
@@ -70,7 +65,6 @@
 
 .settings-section h2 {
   padding: 0 0 20px;
-  border-bottom: 1px solid #e7ebef;
   margin-bottom: 3px;
 }
 
@@ -80,7 +74,6 @@
   justify-content: space-between;
   gap: 16px;
   min-height: 69px;
-  border-bottom: 1px solid #f0f3f5;
   font-size: 12px;
 }
 

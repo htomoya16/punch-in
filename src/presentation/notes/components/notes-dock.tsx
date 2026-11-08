@@ -28,12 +28,20 @@ export type NotesHandle = { flushAll(): Promise<boolean>; refresh(): void };
 type Props = {
   scope: string;
   target: NoteTarget;
+  selectDay(day: string): void;
   close(): void;
   ready(handle: NotesHandle): void;
   reportError(error: boolean): void;
 };
 
-export default memo(function NotesDock({ scope, target, close, ready, reportError }: Props) {
+export default memo(function NotesDock({
+  scope,
+  target,
+  selectDay,
+  close,
+  ready,
+  reportError,
+}: Props) {
   const [store] = useState(() => {
     let storage: Storage | undefined;
     try {
@@ -121,9 +129,11 @@ export default memo(function NotesDock({ scope, target, close, ready, reportErro
   useEffect(() => {
     if (!target.open) return;
     const key = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (document.querySelector("dialog[open], .sidebar.open")) return;
       if (
         event.key === "Escape" &&
+        !document.querySelector(".stats-popover") &&
         !(
           event.target instanceof Element &&
           event.target.closest(".bn-container,.mantine-Popover-dropdown,.bn-menu-dropdown")
@@ -205,7 +215,17 @@ export default memo(function NotesDock({ scope, target, close, ready, reportErro
       aria-hidden={!target.open}
     >
       <header className="notes-heading">
-        <time dateTime={target.day}>{target.day.replaceAll("-", "/")}</time>
+        <input
+          className="notes-date-input"
+          type="date"
+          aria-label="メモの日付"
+          value={target.day}
+          min="0001-01-01"
+          max="9999-12-31"
+          onChange={(event) => {
+            if (event.target.value && event.target.validity.valid) selectDay(event.target.value);
+          }}
+        />
         <div className="notes-heading-actions">
           <span
             className="note-save-status"

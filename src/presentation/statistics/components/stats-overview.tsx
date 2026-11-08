@@ -28,6 +28,8 @@ import { type Period } from "../../../shared/time/calendar";
 import { formatMinuteDateTimeInput } from "../../../shared/time/date-time-format";
 import { formatDurationInWords } from "../../../shared/time/duration-format";
 import DurationValue from "../../components/time/duration-value";
+import { buildChartScale } from "../chart-scale";
+import { placeChartDetail, type ChartAnchor, type DetailPlacement } from "../detail-placement";
 
 function participantPeriod(s: TrackingSession, categoryId: string) {
   const range = getWorkEntryTimeRange(s, categoryId);
@@ -37,7 +39,7 @@ function participantPeriod(s: TrackingSession, categoryId: string) {
 
 type Selection = {
   key: string;
-  anchor: { left: number; bottom: number; width: number };
+  anchor: ChartAnchor;
   pinned: boolean;
 };
 
@@ -101,7 +103,12 @@ export default memo(function StatsOverview({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastPointer = useRef("mouse");
   const popup = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ left: 12, top: 12 });
+  const [position, setPosition] = useState<DetailPlacement>({
+    mode: "floating",
+    left: 12,
+    top: 64,
+    maxHeight: 560,
+  });
   const popupId = useId();
   const selected = rows.find((row) => row.bucket.key === selection?.key);
   const selectedEntries = useMemo(
@@ -133,7 +140,7 @@ export default memo(function StatsOverview({
     const rect = element.getBoundingClientRect();
     setSelection({
       key: bucket.key,
-      anchor: { left: rect.left, bottom: rect.bottom, width: rect.width },
+      anchor: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
       pinned,
     });
     setLimit(30);
@@ -174,42 +181,145 @@ export default memo(function StatsOverview({
   useLayoutEffect(() => {
     if (!selection || !popup.current) return;
     const rect = popup.current.getBoundingClientRect();
-    setPosition({
-      left: Math.max(
-        12,
-        Math.min(
-          selection.anchor.left + selection.anchor.width / 2 - rect.width / 2,
-          window.innerWidth - rect.width - 12,
-        ),
+    setPosition(
+      placeChartDetail(
+        selection.anchor,
+        {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+        rect.height,
       ),
-      top: Math.max(
-        12,
-        Math.min(selection.anchor.bottom + 10, window.innerHeight - rect.height - 12),
-      ),
-    });
+    );
   }, [selection, limit, selected?.bucket.sessions.length]);
   const monthly = period === "year" || period === "all";
-  const max =
-    Math.ceil(Math.max(3600000, ...rows.map((row) => sumTimes(row.values))) / 3600000) * 3600000;
+  const scale = useMemo(
+    () => buildChartScale(Math.max(0, ...rows.map((row) => sumTimes(row.values)))),
+    [rows],
+  );
+  const max = scale.maximumMs;
   const pageCount = Math.max(1, Math.ceil(rows.length / 20));
   const currentPage = Math.min(page, pageCount - 1);
+  const detail =
+    selection && selected ? (
+      <div
+        ref={popup}
+        id={popupId}
+        className={`stats-popover ${position.mode === "inline" ? "is-inline" : ""}`}
+        role="dialog"
+        aria-label={`${selected.bucket.key}の内訳`}
+        style={
+          {
+            ...(position.mode === "floating"
+              ? { left: position.left, top: position.top, maxHeight: position.maxHeight }
+              : {}),
+            "--accent-link": readableColor(accent),
+            "--accent": accent,
+          } as CSSProperties
+        }
+        onPointerEnter={keep}
+        onPointerLeave={leave}
+        onFocusCapture={keep}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) leave();
+        }}
+      >
+        <header>
+          <div>
+            <time>{selected.bucket.key.replaceAll("-", "/")}</time>
+            <strong>
+              <DurationValue value={sumTimes(selected.values)} />
+            </strong>
+            <small>作業時間</small>
+          </div>
+          <button className="icon-button" aria-label="内訳を閉じる" onClick={close}>
+            <X size={18} />
+          </button>
+        </header>
+        <div className="stats-popover-body" tabIndex={0} aria-label="時間とメモの内訳">
+          <div className="popover-totals">
+            {categories
+              .filter((c) => selected.values.has(c.id))
+              .map((c) => (
+                <div key={c.id}>
+                  <span>
+                    <span className="dot" style={{ background: c.color }} />
+                    {c.name}
+                  </span>
+                  <strong>
+                    <DurationValue value={selected.values.get(c.id) ?? 0} />
+                  </strong>
+                </div>
+              ))}
+          </div>
+          <div className="popover-records">
+            {selectedEntries.length ? (
+              selectedEntries.slice(0, limit).map(({ session: s, member: m }) => (
+                <article key={`${s.id}:${getWorkEntryId(m)}`}>
+                  <div>
+                    <span className="popover-category">
+                      {categoryMap.get(m.categoryId)?.name ?? "削除済み"}
+                    </span>
+                    <strong>
+                      <DurationValue
+                        value={
+                          calculateAllocatedDurationsByEntry(s, now).get(getWorkEntryId(m)) ?? 0
+                        }
+                      />
+                    </strong>
+                  </div>
+                  <time className="popover-record-period">
+                    <Clock3
+                      className="time-range-icon"
+                      size={13}
+                      strokeWidth={1.6}
+                      aria-hidden="true"
+                    />
+                    <span>{participantPeriod(s, getWorkEntryId(m))}</span>
+                  </time>
+                  {m.memo && <p>{m.memo}</p>}
+                </article>
+              ))
+            ) : (
+              <p className="popover-empty">記録がありません</p>
+            )}
+            {selectedEntries.length > limit && (
+              <button className="text-button" onClick={() => setLimit(limit + 30)}>
+                さらに表示（{limit} / {selectedEntries.length}件）
+              </button>
+            )}
+          </div>
+        </div>
+        <footer>
+          <button
+            className="text-button"
+            onClick={() => onHistory(selected.bucket.from, selected.bucket.to, categoryFilter)}
+          >
+            履歴を見る
+            <ArrowRight size={15} />
+          </button>
+        </footer>
+      </div>
+    ) : null;
+
   return (
     <>
       <h2 className="stats-chart-heading">作業時間の内訳</h2>
       <section className="stats-chart" aria-label="作業時間のグラフ">
-        <div className="chart-scale">
-          <span>
-            <DurationValue value={max} />
-          </span>
-          <span>
-            <DurationValue value={max / 2} />
-          </span>
-          <span>
-            <DurationValue value={0} />
-          </span>
+        <div className="chart-scale" aria-hidden="true">
+          {scale.ticks.map((tick) => (
+            <span key={tick.value} style={{ bottom: `${tick.ratio * 100}%` }}>
+              <DurationValue value={tick.value} />
+            </span>
+          ))}
         </div>
         <div className="chart-scroll">
           <div className="chart-plot" style={{ minWidth: Math.max(400, rows.length * 27) }}>
+            <div className="chart-grid" aria-hidden="true">
+              {scale.ticks.map((tick) => (
+                <span key={tick.value} style={{ bottom: `calc(${tick.ratio * 100}% - 1px)` }} />
+              ))}
+            </div>
             {rows.map(({ bucket, values }) => (
               <div className="chart-column" key={bucket.key}>
                 <button
@@ -259,6 +369,7 @@ export default memo(function StatsOverview({
           </div>
         </div>
       </section>
+      {position.mode === "inline" ? detail : detail && createPortal(detail, document.body)}
       <section className="stats-table-section" aria-label="時間の集計表">
         <div className="section-heading">
           <h2>{monthly ? "月別の内訳" : "日別の内訳"}</h2>
@@ -350,107 +461,6 @@ export default memo(function StatsOverview({
           </div>
         )}
       </section>
-      {selection &&
-        selected &&
-        createPortal(
-          <div
-            ref={popup}
-            id={popupId}
-            className="stats-popover"
-            role="dialog"
-            aria-label={`${selected.bucket.key}の内訳`}
-            style={
-              {
-                ...position,
-                "--accent-link": readableColor(accent),
-                "--accent": accent,
-              } as CSSProperties
-            }
-            onPointerEnter={keep}
-            onPointerLeave={leave}
-            onFocusCapture={keep}
-            onBlurCapture={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget)) leave();
-            }}
-          >
-            <header>
-              <div>
-                <time>{selected.bucket.key.replaceAll("-", "/")}</time>
-                <strong>
-                  <DurationValue value={sumTimes(selected.values)} />
-                </strong>
-                <small>作業時間</small>
-              </div>
-              <button className="icon-button" aria-label="内訳を閉じる" onClick={close}>
-                <X size={18} />
-              </button>
-            </header>
-            <div className="stats-popover-body" tabIndex={0} aria-label="時間とメモの内訳">
-              <div className="popover-totals">
-                {categories
-                  .filter((c) => selected.values.has(c.id))
-                  .map((c) => (
-                    <div key={c.id}>
-                      <span>
-                        <span className="dot" style={{ background: c.color }} />
-                        {c.name}
-                      </span>
-                      <strong>
-                        <DurationValue value={selected.values.get(c.id) ?? 0} />
-                      </strong>
-                    </div>
-                  ))}
-              </div>
-              <div className="popover-records">
-                {selectedEntries.length ? (
-                  selectedEntries.slice(0, limit).map(({ session: s, member: m }) => (
-                    <article key={`${s.id}:${getWorkEntryId(m)}`}>
-                      <div>
-                        <span className="popover-category">
-                          {categoryMap.get(m.categoryId)?.name ?? "削除済み"}
-                        </span>
-                        <strong>
-                          <DurationValue
-                            value={
-                              calculateAllocatedDurationsByEntry(s, now).get(getWorkEntryId(m)) ?? 0
-                            }
-                          />
-                        </strong>
-                      </div>
-                      <time className="popover-record-period">
-                        <Clock3
-                          className="time-range-icon"
-                          size={13}
-                          strokeWidth={1.6}
-                          aria-hidden="true"
-                        />
-                        <span>{participantPeriod(s, getWorkEntryId(m))}</span>
-                      </time>
-                      {m.memo && <p>{m.memo}</p>}
-                    </article>
-                  ))
-                ) : (
-                  <p className="popover-empty">記録がありません</p>
-                )}
-                {selectedEntries.length > limit && (
-                  <button className="text-button" onClick={() => setLimit(limit + 30)}>
-                    さらに表示（{limit} / {selectedEntries.length}件）
-                  </button>
-                )}
-              </div>
-            </div>
-            <footer>
-              <button
-                className="text-button"
-                onClick={() => onHistory(selected.bucket.from, selected.bucket.to, categoryFilter)}
-              >
-                履歴を見る
-                <ArrowRight size={15} />
-              </button>
-            </footer>
-          </div>,
-          document.body,
-        )}
     </>
   );
 });

@@ -1,0 +1,100 @@
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 3px;
+  border-radius: 6px;
+  color: inherit;
+}
+
+.profile-button:hover {
+  background: #f4f7f9;
+}
+
+.profile-button .account-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatar > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.header-notes-toggle {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.header-notes-toggle.is-open {
+  background: color-mix(in srgb, var(--accent) 8%, white);
+}
+
+.header-notes-toggle .note-error-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.profile-form {
+  display: grid;
+  gap: 24px;
+}
+
+.profile-image-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.profile-image-row .avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
+}
+
+.profile-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.profile-error {
+  color: #b94d40;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.profile-form .modal-actions {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    gap: 12px;
+  }
+  .account {
+    gap: 8px;
+  }
+  .header-notes-label {
+    display: none;
+  }
+  .profile-button {
+    min-width: 40px;
+    justify-content: center;
+  }
+}

@@ -7,7 +7,6 @@
 .topbar {
   height: var(--header-height);
   background: #fff;
-  border-bottom: 1px solid #e5e8ed;
   display: flex;
   align-items: center;
   gap: 22px;
@@ -164,20 +163,8 @@
   margin-top: 26px;
 }
 
-.nav-divider:before {
-  position: absolute;
-  content: "";
-  top: -14px;
-  left: 28px;
-  right: 28px;
-  height: 1px;
-  background: currentColor;
-  opacity: 0.1;
-}
-
 .sidebar-total {
   margin: auto 28px 29px;
-  border-top: 1px solid color-mix(in srgb, var(--sidebar-ink) 13%, transparent);
   padding-top: 25px;
   display: flex;
   flex-direction: column;
@@ -233,7 +220,6 @@
 .page-heading {
   height: 48px;
   padding: 0 40px;
-  border-bottom: 1px solid #e7ebef;
   background: #fff;
 }
 

@@ -15,7 +15,7 @@ export function Modal({
     const d = ref.current;
     d?.showModal();
     d?.querySelector<HTMLElement>(
-      "input:not([type=checkbox]):not([type=color]),select,textarea",
+      "input:not([type=checkbox]):not([type=color]):not([type=file]):not([type=hidden]),select,textarea",
     )?.focus();
     return () => d?.close();
   }, []);

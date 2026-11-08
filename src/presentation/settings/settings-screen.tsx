@@ -186,7 +186,7 @@ export function SettingsScreen({
             onClick={() => void exportBackup()}
           >
             {exporting ? <LoaderCircle size={17} className="spin" /> : <Download size={17} />}
-            すべて書き出す（JSON）
+            書き出す（JSON）
           </button>
           <label className={`outline-button ${pending ? "disabled" : ""}`}>
             <Upload size={17} />

@@ -9,6 +9,14 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+export const userProfiles = sqliteTable("user_profiles", {
+  userId: text("user_id").primaryKey(),
+  displayName: text("display_name"),
+  avatarId: text("avatar_id"),
+  version: integer("version").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const preferences = sqliteTable("preferences", {
   userId: text("user_id").primaryKey(),
   timezone: text("timezone").notNull().default("Asia/Tokyo"),

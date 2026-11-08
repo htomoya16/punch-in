@@ -67,3 +67,6 @@ GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履
 
 
 日時編集の回帰検証は`npm test`と、ローカルWorkerに対する`TEST_BASE_URL=http://127.0.0.1:8792 node tests/work-time-api-test.mjs`で行う。ホイール共通部品は`src/presentation/components/fields/date-time-field.tsx`、記録日からの初期化は`src/presentation/tracking/record-editor.ts`、並行記録の日時再構成は`src/domain/tracking/edit-work-entry-time.ts`を参照する。
+
+
+プロフィールの画像にはR2の`BUCKET`バインディングを使います。ローカルの画像も本番とは独立します。0007を含む未適用のマイグレーションを適用してから起動してください。`TEST_BASE_URL=http://127.0.0.1:8805 npm run test:profile-api`で認証・所有者分離・画像保存・競合・削除を検証できます。ビルド済みのローカルWorkerに対して実行し、本番では実行しません。

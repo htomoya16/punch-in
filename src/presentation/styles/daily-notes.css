@@ -102,7 +102,12 @@
   padding: 0 26px;
 }
 
-.notes-heading time {
+.notes-heading .notes-date-input {
+  width: 124px;
+  min-width: 100px;
+  padding: 3px 0;
+  background: transparent;
+  border: 0;
   font-size: 13px;
   font-weight: 500;
   color: var(--ink);

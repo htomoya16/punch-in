@@ -14,7 +14,6 @@
   align-items: center;
   gap: 9px 16px;
   background: #fff;
-  border-bottom: 1px solid #e4eaf0;
   padding: 14px 0 12px;
 }
 
@@ -109,7 +108,6 @@
   font-size: 13px;
   font-weight: 500;
   text-align: left;
-  border-bottom: 1px solid #e8edf2;
   transition:
     background-color 140ms ease,
     color 140ms ease;
@@ -334,7 +332,6 @@
 
 .work-record {
   padding: 18px 0 12px;
-  border-bottom: 1px solid var(--line, #e0e8ef);
 }
 
 .work-record-heading {
@@ -605,7 +602,6 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 0;
-  border-bottom: 1px solid #e4eaf0;
 }
 
 .template-item-name {

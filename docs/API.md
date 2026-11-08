@@ -160,3 +160,14 @@ Sessionの任意フィールド`work`は`{version:1,mode,members,intervals,batch
 ## 分単位のUI・CSVと保存精度
 
 UIの時刻・時間は分単位で表示するが、API・JSONバックアップの日時と配分は従来のミリ秒単位。DB構造・JSON v4も変更しない。CSVの「秒数」は「作業時間（分）」へ変更し、整数分を出力する。日時列はUTCの分単位表記とする。CSVは分析用であり、端数を含む完全な復元にはJSONを使う。
+
+
+## プロフィール
+
+`GET /api/profile`は`{ profile: { displayName, avatarId, version } }`を返す。未設定は名前・画像IDがnull、versionが0。`PUT /api/profile`はJSONの`{ displayName, expectedVersion }`を受け取り、版が一致する場合だけ保存する。空の表示名は認証由来の表示名へ戻す。競合は409。
+
+`PUT /api/profile/avatar`はPNG・JPEG・WebPのバイナリ本文と`If-Match: <profile version>`を受け取る。上限256KiB。形式・サイズ・所有者・版を検証し、R2へ保存してからD1の画像参照を確定する。競合時は新規ファイルを片付け、古いプロフィールを上書きしない。`DELETE`は同じ版指定で画像を外す。
+
+`GET /api/profile/avatar`は認証した本人の現在の画像だけを返す。任意の画像ID・ユーザーIDを指定して他人の画像は取得できない。画像は`private, no-store`、`nosniff`、`same-origin`で配信する。画像がなければ404。
+
+プロフィールは打刻のrevision・定期取得とは独立する。記録用JSON v1〜v4の形式と対象は維持し、プロフィールと画像は含めない。

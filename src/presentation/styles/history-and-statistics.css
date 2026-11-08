@@ -227,7 +227,6 @@
 }
 
 .history-records .section-heading {
-  border-top: 1px solid #e7ebee;
   padding-top: 23px;
   padding-bottom: 18px;
 }
@@ -354,19 +353,24 @@
   padding: 10px 0 27px;
   position: relative;
   height: 240px;
-  border-bottom: 1px solid #e9edf1;
   margin-bottom: 35px;
 }
 
 .chart-scale {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding-bottom: 28px;
-  font-size: 10px;
-  color: #9da7af;
-  width: 25px;
+  position: relative;
+  align-self: stretch;
+  margin-bottom: 28px;
+  width: 44px;
   flex-shrink: 0;
+  font-size: 11px;
+  color: #718093;
+}
+
+.chart-scale > span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+  white-space: nowrap;
 }
 
 .chart-scroll {
@@ -380,14 +384,21 @@
   display: flex;
   align-items: stretch;
   gap: 0;
-  background: repeating-linear-gradient(
-    to top,
-    transparent 0,
-    transparent calc(50% - 1px),
-    #edf0f3 calc(50% - 1px),
-    #edf0f3 50%
-  );
   position: relative;
+}
+
+.chart-grid {
+  position: absolute;
+  inset: 0 0 28px;
+  pointer-events: none;
+}
+
+.chart-grid > span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #dce4eb;
 }
 
 .chart-column {
@@ -441,7 +452,6 @@
   gap: 20px;
   align-items: center;
   padding: 20px 0;
-  border-bottom: 1px solid #edf0f3;
   font-size: 12px;
 }
 

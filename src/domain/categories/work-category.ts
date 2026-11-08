@@ -1,3 +1,5 @@
+import { BRAND_COLOR } from "../../shared/colors/brand-color";
+
 export type WorkCategory = {
   id: string;
   name: string;
@@ -7,4 +9,4 @@ export type WorkCategory = {
   position: number;
 };
 
-export const DEFAULT_CATEGORIES = [{ id: "punch", name: "打刻", color: "#168ab5" }];
+export const DEFAULT_CATEGORIES = [{ id: "punch", name: "打刻", color: BRAND_COLOR }];

@@ -57,7 +57,7 @@ export function AppHeader({
         }}
       >
         <span className="brand-mark">
-          <img src="/icons/punch-in-96.png" alt="" width={26} height={26} decoding="async" />
+          <img src="/icons/punch-in-96.png?v=3" alt="" width={26} height={26} decoding="async" />
         </span>
         <span>
           Punch <b>in</b>

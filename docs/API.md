@@ -59,13 +59,13 @@ importPreviewのみ `{ "preview": {"categories": 0, "sessions": 0, "skippedCateg
   "preferences": {
     "timezone": "Asia/Tokyo",
     "dayStart": 300,
-    "accent": "#168ab5",
+    "accent": "#2563eb",
     "sidebar": "#000000",
     "reminderEnabled": false,
     "reminderMinutes": 360
   },
   "categories": [{
-    "id": "punch", "name": "打刻", "color": "#168ab5",
+    "id": "punch", "name": "打刻", "color": "#2563eb",
     "hidden": false, "archived": false, "position": 0
   }],
   "sessions": [{

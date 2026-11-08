@@ -9,6 +9,7 @@ import type {
   BackupImportPreview,
 } from "../../application/contracts/client-action";
 import type { UserPreferences } from "../../domain/settings/user-preferences";
+import { BRAND_COLOR } from "../../shared/colors/brand-color";
 import { formatDayStartTime } from "../../shared/time/date-time-format";
 import { ColorInput } from "../components/color-input";
 import type { NotesHandle } from "../notes/components/notes-dock";
@@ -124,7 +125,7 @@ export function SettingsScreen({
           <button
             type="button"
             className="text-button reset-colors"
-            onClick={() => setPrefs({ ...prefs, accent: "#168ab5", sidebar: "#000000" })}
+            onClick={() => setPrefs({ ...prefs, accent: BRAND_COLOR, sidebar: "#000000" })}
           >
             初期カラーに戻す
           </button>

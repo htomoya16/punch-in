@@ -1,4 +1,5 @@
 import { DEFAULT_CATEGORIES } from "../../../domain/categories/work-category";
+import { BRAND_COLOR } from "../../../shared/colors/brand-color";
 
 type Query = { sql: string; values: (string | number)[] };
 
@@ -15,8 +16,8 @@ export function bootstrapQueries(user: string, token = crypto.randomUUID()): Que
     "EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=? AND seeded=1)";
   return [
     {
-      sql: "INSERT INTO preferences (user_id,sidebar) VALUES (?,'#000000') ON CONFLICT DO NOTHING",
-      values: [user],
+      sql: "INSERT INTO preferences (user_id,accent,sidebar) VALUES (?,?,'#000000') ON CONFLICT DO NOTHING",
+      values: [user, BRAND_COLOR],
     },
     ...DEFAULT_CATEGORIES.map((c, i) => ({
       sql: "INSERT INTO categories (user_id,id,name,color,position) SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND seeded=0) ON CONFLICT DO NOTHING",

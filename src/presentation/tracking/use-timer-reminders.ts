@@ -57,7 +57,7 @@ export function useTimerReminders({
         new Notification("終了を忘れていませんか？", {
           body: message,
           tag: running.id,
-          icon: "/icons/punch-in-192.png",
+          icon: "/icons/punch-in-192.png?v=3",
         });
       } catch {
         /* In-app notification is still delivered. */

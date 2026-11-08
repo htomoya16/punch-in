@@ -51,6 +51,8 @@ test("新規ユーザーの初期項目は打刻1つ", () => {
     );
     assert.equal(d.prepare("SELECT seeded FROM preferences").get()?.seeded, 2);
     assert.equal(d.prepare("SELECT sidebar FROM preferences").get()?.sidebar, "#000000");
+    assert.equal(d.prepare("SELECT accent FROM preferences").get()?.accent, "#2563eb");
+    assert.equal(d.prepare("SELECT color FROM categories").get()?.color, "#2563eb");
   } finally {
     d.close();
   }
@@ -64,6 +66,7 @@ test("未使用・未編集の旧初期項目だけを変更し、設定とrevis
       ["打刻"],
     );
     const p = d.prepare("SELECT * FROM preferences").get()!;
+    assert.equal(p.accent, "#168ab5");
     assert.equal(p.day_start, 420);
     assert.equal(p.revision, 8);
     run(d, "migration");

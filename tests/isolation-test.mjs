@@ -60,7 +60,7 @@ r = await post(b, sb, "preferences", { ...sb.preferences, dayStart: 480, accent:
 assert.equal(r.status, 200);
 sb = r.data.state;
 assert.equal((await state(a)).preferences.dayStart, 300);
-assert.equal((await state(a)).preferences.accent, "#168ab5");
+assert.equal((await state(a)).preferences.accent, "#2563eb");
 // Equal record IDs are scoped to the owner rather than globally overwriting a record.
 r = await post(b, sb, "session", {
   id,

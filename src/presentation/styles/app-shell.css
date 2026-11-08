@@ -45,7 +45,7 @@
   height: 26px;
   border-radius: 7px;
   color: var(--accent-ink);
-  background: var(--accent);
+  background: transparent;
 }
 
 .header-divider {

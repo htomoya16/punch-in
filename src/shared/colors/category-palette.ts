@@ -1,5 +1,7 @@
+import { BRAND_COLOR } from "./brand-color";
+
 export const PALETTE = [
-  "#168ab5",
+  BRAND_COLOR,
   "#12a89a",
   "#ec846c",
   "#9380c4",

@@ -109,6 +109,7 @@ export default function PunchInApp({
   const [filter, setFilter] = useState("");
   const {
     noteTarget,
+    setNoteTarget,
     notesActivated,
     noteError,
     setNoteError,
@@ -184,6 +185,12 @@ export default function PunchInApp({
   });
 
   function go(next: AppView, historyFocusDay?: string) {
+    if (next === "punch") {
+      setNoteTarget((target) =>
+        target.open && target.day !== today ? { ...target, day: today, reveal: undefined } : target,
+      );
+    }
+
     if (next === "history") {
       setHistoryLanding(historyFocusDay ? "day" : "overview");
       setHistoryRange(false);

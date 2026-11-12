@@ -55,7 +55,7 @@ export class D1TrackingRepository implements TrackingRepository {
   ): Promise<WorkContext> {
     const [preferences, sessions, categories] = await this.database.batch<Record<string, unknown>>([
       this.database
-        .prepare("SELECT revision,mutation_token FROM preferences WHERE user_id=?")
+        .prepare("SELECT revision,mutation_token,memo_revision FROM preferences WHERE user_id=?")
         .bind(userId),
       this.database
         .prepare("SELECT * FROM sessions WHERE user_id=? AND id=?")
@@ -69,9 +69,49 @@ export class D1TrackingRepository implements TrackingRepository {
       preferences: preference
         ? { revision: Number(preference.revision), mutationId: String(preference.mutation_token) }
         : undefined,
+      memoRevision: Number(preference?.memo_revision ?? 0),
       session: sessions.results[0] ? mapTrackingSessionRow(sessions.results[0]) : undefined,
       categoryAvailable: categories.results.length > 0,
     };
+  }
+
+  async commitRecordEdit(
+    userId: string,
+    identity: MutationIdentity,
+    previous: TrackingSession,
+    next: TrackingSession | null,
+    expectedMemoRevision: number,
+  ) {
+    const guard =
+      "changes()=1 AND EXISTS (SELECT 1 FROM preferences WHERE user_id=? AND mutation_token=?)";
+    const revision = this.database
+      .prepare(
+        "UPDATE preferences SET revision=revision+1,memo_revision=memo_revision+1,mutation_token=? WHERE user_id=? AND revision=? AND memo_revision=?",
+      )
+      .bind(identity.mutationId, userId, identity.expectedRevision, expectedMemoRevision);
+    const record = next
+      ? this.database
+          .prepare(
+            `UPDATE sessions SET category_id=?,started_at=?,ended_at=?,business_day=?,memo=?,work=?,updated_at=? WHERE user_id=? AND id=? AND ${guard}`,
+          )
+          .bind(
+            next.categoryId,
+            next.startedAt,
+            next.endedAt,
+            next.businessDay,
+            next.memo,
+            JSON.stringify(next.work),
+            next.updatedAt,
+            userId,
+            previous.id,
+            userId,
+            identity.mutationId,
+          )
+      : this.database
+          .prepare(`DELETE FROM sessions WHERE user_id=? AND id=? AND ${guard}`)
+          .bind(userId, previous.id, userId, identity.mutationId);
+    const results = await this.database.batch([revision, record]);
+    return results[0].meta.changes > 0;
   }
 
   async hasOverlap(userId: string, session: TrackingSession): Promise<boolean> {

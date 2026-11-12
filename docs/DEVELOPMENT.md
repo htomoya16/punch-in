@@ -70,3 +70,5 @@ GitHubのpublicリポジトリとSitesのソースリポジトリを同じGit履
 
 
 プロフィールの画像にはR2の`BUCKET`バインディングを使います。ローカルの画像も本番とは独立します。0007を含む未適用のマイグレーションを適用してから起動してください。`TEST_BASE_URL=http://127.0.0.1:8805 npm run test:profile-api`で認証・所有者分離・画像保存・競合・削除を検証できます。ビルド済みのローカルWorkerに対して実行し、本番では実行しません。
+
+区間の一括編集は`npm test`と、ローカルWorkerに対する`TEST_BASE_URL=http://127.0.0.1:8812 node tests/record-edit-api-test.mjs`で検証する。`--seed-ui`は開発用アカウントへ表示用の記録を追加するため、通常の検証では指定しない。

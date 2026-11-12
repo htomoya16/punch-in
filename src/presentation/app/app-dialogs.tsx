@@ -10,10 +10,9 @@ import type { TrackingSession } from "../../domain/tracking/tracking-session";
 import { formatMinuteDateTimeInput } from "../../shared/time/date-time-format";
 import { CategoryEditor } from "../categories/category-editor";
 import { Modal } from "../components/modal";
-import AllocationEditor from "../tracking/components/allocation-editor";
+import { TrackingRecordEditor } from "../tracking/components/tracking-record-editor";
 import DeleteRecord from "../tracking/components/delete-record";
 import { SessionEditor } from "../tracking/components/session-editor";
-import WorkTimeEditor from "../tracking/components/work-time-editor";
 
 type Props = {
   closeConfirm: () => void;
@@ -31,7 +30,6 @@ type Props = {
     success?: string,
   ) => Promise<AppActionResult | null>;
   pending: boolean;
-  recordEditMode: "allocation" | "time";
   requestDeleteSession: (session: TrackingSession, categoryId?: string) => void;
   retry: AppActionRequest | null;
   runConfirm: () => Promise<void>;
@@ -40,7 +38,6 @@ type Props = {
   >;
   setEditingCategory: Dispatch<SetStateAction<WorkCategory | null>>;
   setEditingSession: Dispatch<SetStateAction<TrackingSession | null>>;
-  setRecordEditMode: Dispatch<SetStateAction<"allocation" | "time">>;
   setRetry: Dispatch<SetStateAction<AppActionRequest | null>>;
   setToast: Dispatch<SetStateAction<{ text: string; error?: boolean } | null>>;
   state: AppState;
@@ -59,14 +56,12 @@ export function AppDialogs({
   getCurrentServerTime,
   mutate,
   pending,
-  recordEditMode,
   requestDeleteSession,
   retry,
   runConfirm,
   setDeleteTarget,
   setEditingCategory,
   setEditingSession,
-  setRecordEditMode,
   setRetry,
   setToast,
   state,
@@ -128,44 +123,24 @@ export function AppDialogs({
         />
       )}
       {editingSession?.work && (
-        <Modal title="記録を編集" close={() => setEditingSession(null)}>
-          <div className="segmented record-edit-tabs">
-            <button
-              className={recordEditMode === "allocation" ? "selected" : ""}
-              onClick={() => setRecordEditMode("allocation")}
-            >
-              作業時間
-            </button>
-            <button
-              className={recordEditMode === "time" ? "selected" : ""}
-              onClick={() => setRecordEditMode("time")}
-            >
-              日時
-            </button>
-          </div>
-          {recordEditMode === "allocation" ? (
-            <AllocationEditor
-              session={editingSession}
-              categories={state.categories}
-              pending={pending}
-              save={async (payload) => {
-                if (await mutate("work", payload, "作業時間を保存しました"))
-                  setEditingSession(null);
-              }}
-            />
-          ) : (
-            <WorkTimeEditor
-              session={editingSession}
-              categories={state.categories}
-              pending={pending}
-              currentTime={() =>
-                formatMinuteDateTimeInput(getCurrentServerTime(), editingSession.timezone)
-              }
-              save={async (payload) => {
-                if (await mutate("work", payload, "日時を保存しました")) setEditingSession(null);
-              }}
-            />
-          )}
+        <Modal
+          title="記録を編集"
+          wide
+          close={() => {
+            if (!pending) setEditingSession(null);
+          }}
+        >
+          <TrackingRecordEditor
+            session={editingSession}
+            categories={state.categories}
+            pending={pending}
+            errorMessage={toast?.error ? toast.text : undefined}
+            now={getCurrentServerTime}
+            close={() => setEditingSession(null)}
+            save={async (payload) => {
+              if (await mutate("work", payload, "記録を保存しました")) setEditingSession(null);
+            }}
+          />
         </Modal>
       )}
 

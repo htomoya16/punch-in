@@ -26,11 +26,19 @@ export type WorkContext = {
   preferences?: TrackingRevision;
   categoryAvailable: boolean;
   session?: TrackingSession;
+  memoRevision?: number;
 };
 
 export interface TrackingRepository {
   loadPunchContext(userId: string, categoryId: string): Promise<PunchContext>;
   loadWorkContext(userId: string, sessionId: string, categoryId: string): Promise<WorkContext>;
+  commitRecordEdit(
+    userId: string,
+    identity: MutationIdentity,
+    previous: TrackingSession,
+    next: TrackingSession | null,
+    expectedMemoRevision: number,
+  ): Promise<boolean>;
   hasOverlap(userId: string, session: TrackingSession): Promise<boolean>;
 
   /**

@@ -84,7 +84,6 @@ export default function PunchInApp({
     session: TrackingSession;
     categoryId?: string;
   } | null>(null);
-  const [recordEditMode, setRecordEditMode] = useState<"allocation" | "time">("allocation");
   const [editingCategory, setEditingCategory] = useState<WorkCategory | null>(null);
   const [editingSession, setEditingSession] = useState<TrackingSession | null>(null);
   const [confirm, setConfirm] = useState<{
@@ -234,7 +233,6 @@ export default function PunchInApp({
         setToast({ text: "メモの保存を確認してください", error: true });
         return;
       }
-      setRecordEditMode("allocation");
       setEditingSession(getConfirmedState().sessions.find((s) => s.id === session.id) ?? session);
     },
     [memoStore],
@@ -648,14 +646,12 @@ export default function PunchInApp({
         getCurrentServerTime={getCurrentServerTime}
         mutate={mutate}
         pending={pending}
-        recordEditMode={recordEditMode}
         requestDeleteSession={requestDeleteSession}
         retry={retry}
         runConfirm={runConfirm}
         setDeleteTarget={setDeleteTarget}
         setEditingCategory={setEditingCategory}
         setEditingSession={setEditingSession}
-        setRecordEditMode={setRecordEditMode}
         setRetry={setRetry}
         setToast={setToast}
         state={state}

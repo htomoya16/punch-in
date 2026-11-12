@@ -1,3 +1,4 @@
+import { recordEditSchema } from "../validation/record-edit-schema";
 import { z } from "zod";
 
 export const workInput = z.object({
@@ -13,7 +14,9 @@ export const workInput = z.object({
     "allocate",
     "remove",
     "timing",
+    "edit",
   ]),
+  edit: recordEditSchema.optional(),
   categoryId: z.string().min(1).max(100).optional(),
   memberId: z.string().min(1).max(100).optional(),
   startedAt: z.number().int().min(0).max(253402300799000).optional(),

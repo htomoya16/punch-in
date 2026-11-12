@@ -28,6 +28,9 @@ const base: TrackingSession = {
 };
 
 class MemoryTrackingRepository implements TrackingRepository {
+  async commitRecordEdit(): Promise<boolean> {
+    throw new Error("Unexpected record edit");
+  }
   context: PunchContext = {
     preferences: {
       revision: 7,

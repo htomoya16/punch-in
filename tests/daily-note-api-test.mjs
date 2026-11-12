@@ -33,7 +33,11 @@ const check = (name) => console.log("ok", ++passed, "-", name);
 const state = (await get("/api/state")).data;
 assert.equal((await fetch(base + "/api/daily-note?day=" + day)).status, 401);
 check("anonymous read rejected");
-assert.equal((await put(input("forbidden"), { Origin: "https://example.invalid" })).status, 403);
+assert.equal(
+  (await put(input("forbidden"), { Origin: "https://example.invalid", Connection: "close" }))
+    .status,
+  403,
+);
 check("cross-origin save rejected");
 assert.equal((await get("/api/daily-note?day=2026-02-30")).status, 400);
 check("invalid dates rejected");

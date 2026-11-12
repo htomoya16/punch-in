@@ -31,7 +31,9 @@ export function createExecuteAppAction(dependencies: Dependencies) {
     if (input.action === "punch" || input.action === "work") {
       const operation = input.action === "punch" ? dependencies.punch : dependencies.update;
       const delta = await operation(userId, input, receivedAt);
-      return delta && (input.action === "work" || input.responseMode === "delta")
+      return delta &&
+        (input.payload as { control?: string } | undefined)?.control !== "edit" &&
+        (input.action === "work" || input.responseMode === "delta")
         ? { punchDelta: delta }
         : { state: await repository.read(userId) };
     }

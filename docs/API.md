@@ -171,3 +171,11 @@ UIの時刻・時間は分単位で表示するが、API・JSONバックアッ�
 `GET /api/profile/avatar`は認証した本人の現在の画像だけを返す。任意の画像ID・ユーザーIDを指定して他人の画像は取得できない。画像は`private, no-store`、`nosniff`、`same-origin`で配信する。画像がなければ404。
 
 プロフィールは打刻のrevision・定期取得とは独立する。記録用JSON v1〜v4の形式と対象は維持し、プロフィールと画像は含めない。
+
+## 区間・メモ・配分の一括編集
+
+`POST /api/action`の`action: "work"`、`payload.control: "edit"`を使う。payloadは`id`と`edit`を持ち、editには`expectedStructure`（編集開始時の構造キー）、`expectedMemos`（作業記録IDから本文への対応）、`mode`、`entries`を渡す。各entryは`id`・`memo`・`weight`・`intervals: [{ start, end }]`を持ち、手動配分では`manualMs`も指定する。時刻は従来どおりUnixミリ秒。
+
+entriesから外した作業はメモごと削除する。空配列は親記録の削除。作業の配列は保存済みの順序を保ち、区間から内部の参加状態を再構成する。同じ作業の重複、未来、逆転、他の親記録との重複を拒否する。計測中の区間は終了後に削除する。
+
+構造の変更、編集・削除するメモの競合、読取後のメモrevision変更を検出する。区間・配分・メモ・revisionは同じD1バッチで保存し、競合時には部分的に確定しない。未編集のメモには最新値を使う。この操作の成功応答は`{ state }`で、編集されたメモや削除を画面へ確実に反映する。通常の打刻・一時停止などの差分APIは維持する。

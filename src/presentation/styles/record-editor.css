@@ -1,0 +1,209 @@
+.modal.modal-wide {
+  width: 760px;
+}
+
+.tracking-record-editor > fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.record-allocation-control,
+.record-edit-entry-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.record-allocation-control {
+  margin-bottom: 24px;
+  font-size: 12px;
+}
+
+.record-edit-entry {
+  padding: 18px;
+  background: #f7f9fb;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+
+.record-edit-entry-heading {
+  margin-bottom: 16px;
+}
+
+.record-edit-entry-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.record-edit-entry-heading strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-edit-entry-heading > span {
+  font-size: 11px;
+  color: #956b64;
+}
+
+.interval-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+  gap: 10px 12px;
+  align-items: center;
+  margin: 12px 0 18px;
+}
+
+.interval-edit-row .date-time-field {
+  margin: 0;
+  min-width: 0;
+}
+
+.interval-edit-row .date-time-value {
+  flex-wrap: wrap;
+  padding: 8px;
+  gap: 6px;
+}
+
+.interval-edit-row .date-time-picker {
+  grid-column: 1/-1;
+}
+
+.interval-edit-row .date-time-field:has(.date-time-picker) {
+  grid-column: 1/-1;
+}
+
+.interval-edit-row > .icon-button {
+  align-self: start;
+  margin-top: 24px;
+}
+
+.interval-edit-duration {
+  grid-column: 1/3;
+  justify-self: end;
+  color: #61748a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.interval-removed,
+.record-edit-allocation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.interval-removed > span {
+  color: #8b7772;
+}
+
+.record-edit-allocation .input-unit {
+  width: 130px;
+}
+
+.interval-delete-confirm {
+  background: #fff4f1;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.interval-delete-confirm p {
+  margin: 0 0 12px;
+}
+.interval-delete-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.interval-live {
+  color: #61748a;
+  font-size: 12px;
+}
+
+.record-edit-memo {
+  margin-top: 18px;
+  margin-bottom: 0;
+}
+.record-edit-memo textarea {
+  resize: vertical;
+  field-sizing: content;
+  max-height: 300px;
+  overflow: auto;
+}
+
+@media (max-width: 520px) {
+  .modal-wide .modal-body {
+    padding: 20px 16px;
+  }
+  .record-edit-entry {
+    padding: 12px;
+  }
+  .interval-edit-row {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+  .interval-edit-row > .date-time-field {
+    grid-column: 1;
+  }
+  .interval-edit-row > .icon-button {
+    grid-column: 2;
+    grid-row: 1/3;
+  }
+  .interval-edit-duration {
+    grid-column: 1;
+  }
+  .record-edit-entry-heading {
+    align-items: flex-start;
+  }
+}
+
+.record-edit-memo textarea {
+  scrollbar-width: none;
+}
+.record-edit-memo textarea::-webkit-scrollbar {
+  display: none;
+}
+
+.record-allocation-control > span {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tracking-record-editor > .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: #fff;
+  padding: 14px 0;
+}
+@media (max-width: 520px) {
+  .record-allocation-control {
+    gap: 10px;
+  }
+  .record-allocation-control .segmented {
+    min-width: 0;
+    flex: 1;
+  }
+  .record-allocation-control .segmented button {
+    min-width: 0;
+    padding: 8px 10px;
+    flex: 1;
+  }
+  .tracking-record-editor > .modal-actions {
+    bottom: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .interval-edit-row:has(.date-time-picker) > .icon-button {
+    visibility: hidden;
+  }
+}

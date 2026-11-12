@@ -1,3 +1,8 @@
+import {
+  editTrackingRecord,
+  trackingRecordStructure,
+} from "../../../domain/tracking/edit-tracking-record";
+import { getWorkEntries } from "../../../domain/tracking/work-entry";
 import { editWorkTime } from "../../../domain/tracking/edit-work-entry-time";
 import type { TrackingSession } from "../../../domain/tracking/tracking-session";
 import {
@@ -31,6 +36,55 @@ export function createUpdateTrackingSession({
       throw new ApplicationError("conflict", "別の画面で更新されました。もう一度操作してください");
     if (!context.session) throw new ApplicationError("not_found", "記録が見つかりません");
     const old = context.session;
+    if (p.control === "edit") {
+      if (!p.edit) throw new ApplicationError("invalid_input", "編集内容を確認してください");
+      if (p.edit.expectedStructure !== trackingRecordStructure(old))
+        throw new ApplicationError("conflict", "記録が更新されています。編集を開き直してください");
+      const changes = new Map(p.edit.entries.map((entry) => [entry.id, entry]));
+      for (const entry of getWorkEntries(old)) {
+        const id = getWorkEntryId(entry),
+          edit = changes.get(id),
+          expected = p.edit.expectedMemos[id];
+        if (
+          expected === undefined ||
+          ((!edit || edit.memo !== expected) && entry.memo !== expected)
+        )
+          throw new ApplicationError(
+            "conflict",
+            "メモが更新されています。編集を開き直してください",
+          );
+        if (edit && edit.memo === expected) edit.memo = entry.memo;
+      }
+      let edited: TrackingSession | null;
+      try {
+        const value = editTrackingRecord(old, p.edit.entries, p.edit.mode, receivedAt);
+        edited = value ? sessionSchema.parse(value) : null;
+      } catch (error) {
+        throw new ApplicationError(
+          "invalid_input",
+          error instanceof Error ? error.message : "区間を確認してください",
+        );
+      }
+      if (
+        edited &&
+        edited.startedAt !== edited.endedAt &&
+        (await repository.hasOverlap(userId, edited))
+      )
+        throw new ApplicationError("invalid_input", "ほかの記録と時間が重なっています");
+      if (
+        !(await repository.commitRecordEdit(userId, input, old, edited, context.memoRevision ?? 0))
+      )
+        throw new ApplicationError(
+          "conflict",
+          "記録やメモが更新されています。編集を開き直してください",
+        );
+      return {
+        baseRevision: input.expectedRevision,
+        revision: input.expectedRevision + 1,
+        sessions: edited ? [edited] : [],
+        serverNow: clock.now(),
+      };
+    }
     let next: TrackingSession;
     if (p.control === "timing") {
       if (!p.memberId || p.startedAt === undefined || p.endedAt === undefined)
